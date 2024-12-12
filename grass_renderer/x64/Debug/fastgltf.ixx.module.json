@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "grass_renderer\\x64\\Debug\\fastgltf.ixx.obj",
+            "outputs": [
+                "D:\\vulkan\\projects\\grass_renderer\\grass_renderer\\x64\\Debug\\vc143.pdb",
+                "grass_renderer\\x64\\Debug\\",
+                "D:\\vulkan\\projects\\grass_renderer\\grass_renderer\\x64\\Debug\\fastgltf.ixx.ifc"
+            ],
+            "provides": [
+                {
+                    "logical-name": "fastgltf",
+                    "source-path": "d:\\vulkan\\projects\\grass_renderer\\thirdparty\\gltf\\fastgltf.ixx",
+                    "is-interface": true
+                }
+            ],
+            "requires": []
+        }
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "Version": "1.1",
+    "Data": {
+        "Source": "d:\\vulkan\\projects\\grass_renderer\\thirdparty\\gltf\\fastgltf.ixx",
+        "ProvidedModule": "fastgltf",
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}
