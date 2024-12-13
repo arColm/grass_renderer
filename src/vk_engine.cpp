@@ -49,11 +49,11 @@ void VulkanEngine::init()
 	initSwapchain();
 	initCommands();
 	initSyncStructures();
+	initDescriptors();
+	initPipelines();
 	
 	initDefaultData();
 
-	initDescriptors();
-	initPipelines();
 	initImGui();
 
 
@@ -278,7 +278,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	GPUDrawPushConstants pushConstants;
-	glm::mat4 view = glm::translate(glm::vec3{ 0, 0, -5 });
+	glm::mat4 view = _player.getViewMatrix();
 	glm::mat4 projection = glm::perspective(
 		glm::radians(70.f),
 		(float)_drawExtent.width / (float)_drawExtent.height,
@@ -312,8 +312,19 @@ void VulkanEngine::run()
 	SDL_Event e;
 	bool bQuit = false;
 
+	auto lastTickTime = std::chrono::high_resolution_clock::now();
+
 	while (!bQuit)
 	{
+		auto tickTime = std::chrono::high_resolution_clock::now();
+		auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(tickTime-lastTickTime);
+		lastTickTime = tickTime;
+
+		float deltaTime = elapsedTime.count() / 1000.f;
+
+		_engineStats.frameTime = elapsedTime.count();
+		_engineStats.fps = 1.f / _engineStats.frameTime;
+
 		while (SDL_PollEvent(&e) != 0)
 		{
 			if (e.type == SDL_QUIT)
@@ -326,6 +337,7 @@ void VulkanEngine::run()
 					_stopRendering = false;
 			}
 
+			_player.processSDLEvent(e, deltaTime);
 			ImGui_ImplSDL2_ProcessEvent(&e); //ImGui event handling
 		}
 
@@ -358,14 +370,25 @@ void VulkanEngine::run()
 			ImGui::InputFloat4("data2", (float*)&selected.data.data2);
 			ImGui::InputFloat4("data3", (float*)&selected.data.data3);
 			ImGui::InputFloat4("data4", (float*)&selected.data.data4);
+
+			ImGui::End();
 		}
 
-		ImGui::End();
+		if (ImGui::Begin("stats"))
+		{
+			ImGui::Text("frame time: %f ms", _engineStats.frameTime);
+			ImGui::Text("fps: %f", _engineStats.fps);
+
+			ImGui::End();
+		}
+
 
 		ImGui::Render();
 
 		//draw frame
 		draw();
+
+		updateScene(deltaTime);
 	}
 }
 
@@ -476,6 +499,11 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 
 	return newSurface;
+}
+
+void VulkanEngine::updateScene(float deltaTime)
+{
+	_player.update(deltaTime);
 }
 
 void VulkanEngine::initVulkan()
@@ -1013,7 +1041,7 @@ void VulkanEngine::initMeshPipeline()
 	//	disable blending
 	pipelineBuilder.enableBlendingAlphaBlend();
 	// depth testing
-	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 	//connect image format we will draw to, from draw image
 	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);

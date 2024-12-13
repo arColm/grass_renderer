@@ -2,11 +2,17 @@
 
 #include "vk_types.hpp"
 #include "vk_loader.hpp"
+#include "player.hpp"
 
 
 class VulkanEngine
 {
 public:
+	struct EngineStats
+	{
+		float frameTime;
+		float fps;
+	};
 
 	struct DeletionQueue
 	{
@@ -110,6 +116,11 @@ public:
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 	
 
+	//scene
+	Player _player;
+
+	EngineStats _engineStats;
+
 
 	//initializes everything in engine
 	void init();
@@ -133,6 +144,9 @@ public:
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
+	//scene
+	void updateScene(float deltaTime);
 private:
 
 	void initVulkan();

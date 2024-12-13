@@ -16,6 +16,9 @@
     <Filter Include="Third Party Resources">
       <UniqueIdentifier>{391e0487-09c6-4e7d-a47c-d87a99d43d54}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shader Files">
+      <UniqueIdentifier>{d4a301c4-a85a-4dc9-bf66-7c732b5c52a2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="thirdparty\format.cc">
@@ -90,6 +93,9 @@
     <ClCompile Include="src\vk_types.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\player.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="thirdparty\imgui\imconfig.h">
@@ -143,5 +149,37 @@
     <ClInclude Include="src\vk_types.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\player.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\colored_triangle.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\colored_triangle.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\colored_triangle_mesh.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\gradient.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\gradient_color.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\mesh.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\mesh.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\sky.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\input_structures.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

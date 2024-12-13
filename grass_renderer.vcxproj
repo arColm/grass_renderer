@@ -134,6 +134,7 @@
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\player.cpp" />
     <ClCompile Include="src\vk_descriptors.cpp" />
     <ClCompile Include="src\vk_engine.cpp" />
     <ClCompile Include="src\vk_images.cpp" />
@@ -159,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.hpp" />
+    <ClInclude Include="src\player.hpp" />
     <ClInclude Include="src\vk_descriptors.hpp" />
     <ClInclude Include="src\vk_engine.hpp" />
     <ClInclude Include="src\vk_images.hpp" />
@@ -175,6 +177,17 @@
     <ClInclude Include="thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="thirdparty\imgui\imstb_truetype.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\colored_triangle.frag" />
+    <None Include="shaders\colored_triangle.vert" />
+    <None Include="shaders\colored_triangle_mesh.vert" />
+    <None Include="shaders\gradient.comp" />
+    <None Include="shaders\gradient_color.comp" />
+    <None Include="shaders\input_structures.glsl" />
+    <None Include="shaders\mesh.frag" />
+    <None Include="shaders\mesh.vert" />
+    <None Include="shaders\sky.comp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
