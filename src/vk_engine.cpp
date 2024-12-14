@@ -23,6 +23,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtx/transform.hpp>
+#include "noise.hpp"
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -304,6 +305,12 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
+
+	//draw ground
+	pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
+	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
 	vkCmdEndRendering(cmd);
 }
 
@@ -493,6 +500,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 		indexCopy.srcOffset = vertexBufferSize;
 		indexCopy.size = indexBufferSize;
 		vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+		//std::cout << vertexCopy.size << '-' << indexCopy.size << '\n';
 		});
 
 	destroyBuffer(staging);
@@ -629,6 +637,14 @@ void VulkanEngine::initSwapchain()
 			vkDestroyImageView(_device, _depthImage.imageView, nullptr);
 			vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
 		});
+
+	_noiseImage = Noise::generatePerlinNoiseImage(_device, _allocator, 1024, 1024, VK_FORMAT_R8_UNORM);
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _noiseImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _noiseImage.image, _noiseImage.allocation);
+		}
+	);
 }
 
 void VulkanEngine::initCommands()
@@ -1084,11 +1100,59 @@ void VulkanEngine::initDefaultData()
 
 	_rectangle = uploadMesh(rectIndices, rectVertices);
 
-	//load meshes
-	testMeshes = loadGltfMeshes(this, "./assets/basicmesh.glb").value();
-
 	_mainDeletionQueue.pushFunction([&]() {
 		destroyBuffer(_rectangle.indexBuffer);
 		destroyBuffer(_rectangle.vertexBuffer);
-	});
+		});
+
+	//load meshes
+	testMeshes = loadGltfMeshes(this, "./assets/basicmesh.glb").value();
+	initGround();
+}
+
+void VulkanEngine::initGround()
+{
+	//TODO
+	MeshAsset meshAsset{};
+
+	std::array<Vertex, 4> vertices{};
+	
+	vertices[0] = { glm::vec3(3, -2, 3), 1, glm::vec3(0, 1, 0), 1, glm::vec4(0.05f, 0.8f, 0.05f, 1.0f) };
+	vertices[1] = { glm::vec3(-3,-2,3), 0, glm::vec3(0,1,0), 1, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
+	vertices[2] = { glm::vec3(3,-2,-3), 1, glm::vec3(0,1,0), 0, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
+	vertices[3] = { glm::vec3(-3,-2,-3), 0, glm::vec3(0,1,0), 0, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
+	
+	std::vector<uint32_t> indices{
+		0,3,1,
+		0,2,3
+	};
+
+	std::vector<GeoSurface> surfaces;
+	surfaces.resize(1);
+	surfaces[0].count = static_cast<uint32_t>(6);
+	surfaces[0].startIndex = static_cast<uint32_t>(0);
+
+
+	meshAsset.name = "ground";
+	meshAsset.surfaces = surfaces;
+	meshAsset.meshBuffers = uploadMesh(indices,vertices);
+
+
+	_groundMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+	_mainDeletionQueue.pushFunction(
+		[&]() {
+			destroyBuffer(_groundMesh->meshBuffers.vertexBuffer);
+			destroyBuffer(_groundMesh->meshBuffers.indexBuffer);
+		}
+	);
+}
+
+void VulkanEngine::initGrass()
+{
+	//TODO
+	MeshAsset meshAsset{};
+
+
+	_grassMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
 }

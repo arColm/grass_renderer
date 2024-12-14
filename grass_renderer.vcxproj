@@ -134,6 +134,7 @@
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\noise.cpp" />
     <ClCompile Include="src\player.cpp" />
     <ClCompile Include="src\vk_descriptors.cpp" />
     <ClCompile Include="src\vk_engine.cpp" />
@@ -159,7 +160,9 @@
     <ClCompile Include="thirdparty\VkBootstrap.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\vkguide\src\noise.hpp" />
     <ClInclude Include="Application.hpp" />
+    <ClInclude Include="src\noise.hpp" />
     <ClInclude Include="src\player.hpp" />
     <ClInclude Include="src\vk_descriptors.hpp" />
     <ClInclude Include="src\vk_engine.hpp" />

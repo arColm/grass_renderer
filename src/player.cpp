@@ -23,6 +23,7 @@ void Player::processSDLEvent(SDL_Event& e, float deltaTime)
 {
     if (e.type == SDL_KEYDOWN)
     {
+        //really fast "bandaid" movement system
         switch (e.key.keysym.sym)
         {
         case(SDLK_w):
@@ -80,4 +81,9 @@ void Player::move(float deltaTime)
     glm::vec3 d = glm::vec3(cameraRotation * glm::vec4(_velocity * deltaTime, 0.f));
     d.y = 0;
     _position += d;
+}
+
+void Player::handleCollisions()
+{
+
 }

@@ -83,6 +83,7 @@ public:
 	VmaAllocator _allocator;
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
+	AllocatedImage _noiseImage;
 	VkExtent2D _drawExtent;
 	float _renderScale = 1.f;
 
@@ -120,6 +121,8 @@ public:
 	Player _player;
 
 	EngineStats _engineStats;
+	std::shared_ptr<MeshAsset> _groundMesh;
+	std::shared_ptr<MeshAsset> _grassMesh;
 
 
 	//initializes everything in engine
@@ -169,4 +172,9 @@ private:
 
 	void initMeshPipeline();
 	void initDefaultData();
+
+	//scene
+	void initGround();
+	void initGrass();
+
 };

@@ -61,6 +61,8 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngi
 			GeoSurface newSurface;
 			newSurface.startIndex = (uint32_t)indices.size();
 			newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
+			//std::cout << mesh.name<< '-'<<newSurface.count << '-' << newSurface.startIndex << '\n';
+
 
 			size_t initialVtx = vertices.size();
 
