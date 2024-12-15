@@ -190,5 +190,8 @@
     <None Include="shaders\input_structures.glsl">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\grass.vert">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

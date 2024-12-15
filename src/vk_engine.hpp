@@ -92,38 +92,39 @@ public:
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
-	//pipelines
-	VkPipeline _gradientPipeline;
-	VkPipelineLayout _gradientPipelineLayout;
-	
-	std::vector<ComputeEffect> backgroundEffects;
-	int currentBackgroundEffect{ 0 };
-
 	//immediate submit structures
 	VkFence _immFence;
 	VkCommandBuffer _immCommandBuffer;
 	VkCommandPool _immCommandPool;
 
-	//triangle pipeline
-	VkPipelineLayout _trianglePipelineLayout;
-	VkPipeline _trianglePipeline;
+	//background pipeline
+	VkPipelineLayout _backgroundPipelineLayout;
+	VkPipeline _backgroundPipeline;
 
 	//mesh pipeline
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline _meshPipeline;
-
-	GPUMeshBuffers _rectangle;
 
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 	
 
 	//scene
 	Player _player;
+	SceneData _sceneData;
 
 	EngineStats _engineStats;
 	std::shared_ptr<MeshAsset> _groundMesh;
-	std::shared_ptr<MeshAsset> _grassMesh;
+	std::unordered_map<std::string, std::shared_ptr<MeshAsset>> _meshAssets;
 
+	//grass
+	float _maxGrassDistance;
+	float _grassDensity;
+	int _grassCount;
+	AllocatedBuffer _grassPositions;
+	VkPipelineLayout _grassPipelineLayout;
+	VkPipeline _grassPipeline;
+	VkFence _grassFence;
+	std::shared_ptr<MeshAsset> _grassMesh;
 
 	//initializes everything in engine
 	void init();
@@ -168,10 +169,11 @@ private:
 
 	void initImGui();
 
-	void initTrianglePipeline();
-
 	void initMeshPipeline();
+	void initGrassPipeline();
+
 	void initDefaultData();
+	void initSceneData();
 
 	//scene
 	void initGround();

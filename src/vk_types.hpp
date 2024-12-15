@@ -105,3 +105,13 @@ struct GPUMeshBuffers
     AllocatedBuffer vertexBuffer;
     VkDeviceAddress vertexBufferAddress;
 };
+
+struct SceneData
+{
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewProj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection; //w for sunlight strength
+    glm::vec4 sunlightColor;
+};
