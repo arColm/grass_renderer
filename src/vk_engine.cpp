@@ -296,7 +296,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 		0.1f,10000.f);
 	projection[1][1] *= -1; //invert y -axis
 	//pushConstants.worldMatrix = projection * view;
-	pushConstants.worldMatrix = glm::mat4(1);
+	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
@@ -316,16 +316,18 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 
 	{
-		////grass rendering
-		//vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
+		//grass rendering
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
 
-		//pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
+		pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
+		pushConstants.worldMatrix = glm::translate(glm::vec3(1, -2, 0));
 
-		//vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-		//vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+		vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+		vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-		////draw _grassCount instances
-		//vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
+		//draw _grassCount instances
+		vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
 
 	}
 	vkCmdEndRendering(cmd);
@@ -811,6 +813,7 @@ void VulkanEngine::initPipelines()
 {
 	initBackgroundPipelines();
 	initMeshPipeline();
+	initGrassPipeline();
 }
 
 void VulkanEngine::initBackgroundPipelines()
@@ -1006,8 +1009,8 @@ void VulkanEngine::initMeshPipeline()
 
 void VulkanEngine::initGrassPipeline()
 {
-	VkShaderModule fragShader;
-	if (!vkutil::loadShaderModule("./shaders/grass.frag.spv", _device, &fragShader))
+	VkShaderModule meshFragShader;
+	if (!vkutil::loadShaderModule("./shaders/mesh.frag.spv", _device, &meshFragShader))
 	{
 		fmt::print("error when building grass fragmentshader module");
 	}
@@ -1015,8 +1018,8 @@ void VulkanEngine::initGrassPipeline()
 	{
 		fmt::print("grass fragment shader loaded");
 	}
-	VkShaderModule vertShader;
-	if (!vkutil::loadShaderModule("./shaders/grass.vert.spv", _device, &vertShader))
+	VkShaderModule meshVertShader;
+	if (!vkutil::loadShaderModule("./shaders/grass.vert.spv", _device, &meshVertShader))
 	{
 		fmt::print("error when building grass vertex shader module");
 	}
@@ -1031,11 +1034,15 @@ void VulkanEngine::initGrassPipeline()
 	bufferRange.size = sizeof(GPUDrawPushConstants);
 	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+	//sets
+
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_grassPipelineLayout));
 
@@ -1045,7 +1052,7 @@ void VulkanEngine::initGrassPipeline()
 	//	pipeline layout
 	pipelineBuilder._pipelineLayout = _grassPipelineLayout;
 	//	connect vertex and fragment shaders to pipeline
-	pipelineBuilder.setShaders(vertShader, fragShader);
+	pipelineBuilder.setShaders(meshVertShader, meshFragShader);
 	//	input topology
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	//	polygon mode
@@ -1067,8 +1074,8 @@ void VulkanEngine::initGrassPipeline()
 	_grassPipeline = pipelineBuilder.buildPipeline(_device);
 
 	//clean structures
-	vkDestroyShaderModule(_device, fragShader, nullptr);
-	vkDestroyShaderModule(_device, vertShader, nullptr);
+	vkDestroyShaderModule(_device, meshFragShader, nullptr);
+	vkDestroyShaderModule(_device, meshVertShader, nullptr);
 
 	_mainDeletionQueue.pushFunction([&]() {
 		vkDestroyPipelineLayout(_device, _grassPipelineLayout, nullptr);
@@ -1081,6 +1088,7 @@ void VulkanEngine::initDefaultData()
 	//load meshes
 	testMeshes = loadGltfMeshes(this, "./assets/basicmesh.glb").value();
 	initGround();
+	initGrass();
 }
 
 void VulkanEngine::initSceneData()
@@ -1119,7 +1127,7 @@ void VulkanEngine::initGround()
 
 	std::vector<GeoSurface> surfaces;
 	surfaces.resize(1);
-	surfaces[0].count = static_cast<uint32_t>(6);
+	surfaces[0].count = static_cast<uint32_t>(indices.size());
 	surfaces[0].startIndex = static_cast<uint32_t>(0);
 
 
@@ -1141,9 +1149,48 @@ void VulkanEngine::initGround()
 
 void VulkanEngine::initGrass()
 {
-	//TODO
 	MeshAsset meshAsset{};
+
+	std::array<Vertex, 9> vertices{};
+	glm::vec4 color{ 0.07f,0.23f,0.09f,1.0f };
+
+	vertices[0] = { glm::vec3(0.05f, 0,0), 1, glm::vec3(0, 0, -1), 1, color * 1.2f };
+	vertices[1] = { glm::vec3(-0.05f,0,0), 0, glm::vec3(0, 0, -1), 1, color * 1.3f };
+	vertices[2] = { glm::vec3(0.05f, 0.3f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.4f };
+	vertices[3] = { glm::vec3(-0.05f,0.3f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.5f };
+	vertices[4] = { glm::vec3(0.05f, 0.6f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.6f };
+	vertices[5] = { glm::vec3(-0.05f,0.6f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.7f };
+	vertices[6] = { glm::vec3(0.05f, 0.9f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.8f };
+	vertices[7] = { glm::vec3(-0.05f,0.9f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.9f };
+	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, glm::vec3(0, 0, -1), 1, color*2.f };
+
+	std::vector<uint32_t> indices{
+		0,3,1,
+		0,2,3,
+		2,5,3,
+		2,4,5,
+		4,7,5,
+		4,6,7,
+		6,8,7
+	};
+
+	std::vector<GeoSurface> surfaces;
+	surfaces.resize(1);
+	surfaces[0].count = static_cast<uint32_t>(indices.size());
+	surfaces[0].startIndex = static_cast<uint32_t>(0);
+
+
+	meshAsset.name = "grass";
+	meshAsset.surfaces = surfaces;
+	meshAsset.meshBuffers = uploadMesh(indices, vertices);
 
 
 	_grassMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+	_mainDeletionQueue.pushFunction(
+		[&]() {
+			destroyBuffer(_grassMesh->meshBuffers.vertexBuffer);
+			destroyBuffer(_grassMesh->meshBuffers.indexBuffer);
+		}
+	);
 }

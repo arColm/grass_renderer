@@ -123,7 +123,7 @@ public:
 	//grass
 	float _maxGrassDistance;
 	float _grassDensity;
-	int _grassCount;
+	int _grassCount = 1;
 	AllocatedBuffer _grassPositions;
 	VkPipelineLayout _grassPipelineLayout;
 	VkPipeline _grassPipeline;

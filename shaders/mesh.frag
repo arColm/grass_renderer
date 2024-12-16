@@ -23,5 +23,5 @@ void main() {
 	vec3 light = ambientLight + (diffuseLight) * sceneData.sunlightDirection.w;
 
 	outFragColor = vec4(color * light, 1.0f);
-	//outFragColor = vec4(ambientLight, 1.0f);
+	//outFragColor = vec4(color, 1.0f);
 }
