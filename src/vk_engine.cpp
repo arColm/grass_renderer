@@ -54,7 +54,7 @@ void VulkanEngine::init()
 	initPipelines();
 	
 	initDefaultData();
-	//initSceneData();
+	initSceneData();
 
 	initImGui();
 
@@ -242,6 +242,22 @@ void VulkanEngine::drawImGui(VkCommandBuffer cmd, VkImageView targetImageView)
 
 void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 {
+	//PER FRAME DATA
+	//	Scene Data
+	AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	getCurrentFrame().deletionQueue.pushFunction(
+		[=, this]() {
+			destroyBuffer(sceneDataBuffer);
+		}
+	);
+	SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
+	*sceneUniformData = _sceneData; //write scene data to buffer
+
+	VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
+	DescriptorWriter writer;
+	writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.updateSet(_device, sceneDataDescriptorSet);
+	
 	//begin a render pass connected to draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -279,12 +295,13 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 		//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
 		0.1f,10000.f);
 	projection[1][1] *= -1; //invert y -axis
-	pushConstants.worldMatrix = projection * view;
+	//pushConstants.worldMatrix = projection * view;
+	pushConstants.worldMatrix = glm::mat4(1);
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
-
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -330,7 +347,7 @@ void VulkanEngine::run()
 		float deltaTime = elapsedTime.count() / 1000.f;
 
 		_engineStats.frameTime = elapsedTime.count();
-		_engineStats.fps = 1.f / _engineStats.frameTime;
+		_engineStats.fps = 1000.f / _engineStats.frameTime;
 
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -497,6 +514,7 @@ void VulkanEngine::updateScene(float deltaTime)
 {
 	_player.update(deltaTime);
 	_sceneData.view = _player.getViewMatrix();
+	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
 }
 
 void VulkanEngine::initVulkan()
@@ -731,45 +749,60 @@ void VulkanEngine::resizeSwapchain()
 void VulkanEngine::initDescriptors()
 {
 	//create a descriptor pool that will hold 10 sets with 1 image each
-	std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {
-		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
+	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
 	};
 
-	globalDescriptorAllocator.initPool(_device, 10, sizes);
+	_globalDescriptorAllocator.init(_device, 10, sizes);
 
+	//DESCRIPTOR LAYOUTS
 	//make the descriptor set layout for our compute draw
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		_sceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
 	//allocate a descriptor set for draw image
-	_drawImageDescriptors = globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
+	_drawImageDescriptors = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
 
-	VkDescriptorImageInfo imgInfo{};
-	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imgInfo.imageView = _drawImage.imageView;
+	DescriptorWriter writer;
+	writer.writeImage(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.updateSet(_device, _drawImageDescriptors);
 
-	VkWriteDescriptorSet drawImageWrite{};
-	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	drawImageWrite.pNext = nullptr;
+	//frame descriptors
+	for (int i = 0; i < FRAME_OVERLAP; i++)
+	{
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
+			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+		};
 
-	drawImageWrite.dstBinding = 0;
-	drawImageWrite.dstSet = _drawImageDescriptors;
+		_frames[i].descriptorAllocator = DescriptorAllocatorGrowable{};
+		_frames[i].descriptorAllocator.init(_device, 1000, frameSizes);
 
-	drawImageWrite.descriptorCount = 1;
-	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		//deletion
+		_mainDeletionQueue.pushFunction(
+			[&, i]() {
+				_frames[i].descriptorAllocator.destroyPools(_device);
+			}
+		);
+	}
 
-	drawImageWrite.pImageInfo = &imgInfo;
-	drawImageWrite.pBufferInfo = nullptr;
-	drawImageWrite.pTexelBufferView = nullptr;
-
-	vkUpdateDescriptorSets(_device, 1, &drawImageWrite, 0, nullptr);
 
 	//deletion
 	_mainDeletionQueue.pushFunction([&]() {
-		globalDescriptorAllocator.destroyPool(_device);
+		_globalDescriptorAllocator.destroyPools(_device);
 		vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
 	});
 }
@@ -898,7 +931,7 @@ void VulkanEngine::initImGui()
 void VulkanEngine::initMeshPipeline()
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::loadShaderModule("./shaders/colored_triangle.frag.spv", _device, &meshFragShader))
+	if (!vkutil::loadShaderModule("./shaders/mesh.frag.spv", _device, &meshFragShader))
 	{
 		fmt::print("error when building triangle fragmentshader module");
 	}
@@ -907,7 +940,7 @@ void VulkanEngine::initMeshPipeline()
 		fmt::print("triangle fragment shader loaded");
 	}
 	VkShaderModule meshVertShader;
-	if (!vkutil::loadShaderModule("./shaders/colored_triangle_mesh.vert.spv", _device, &meshVertShader))
+	if (!vkutil::loadShaderModule("./shaders/mesh.vert.spv", _device, &meshVertShader))
 	{
 		fmt::print("error when building triangle vertex shader module");
 	}
@@ -922,11 +955,15 @@ void VulkanEngine::initMeshPipeline()
 	bufferRange.size = sizeof(GPUDrawPushConstants);
 	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+	//sets
+
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_meshPipelineLayout));
 
@@ -1048,30 +1085,32 @@ void VulkanEngine::initDefaultData()
 
 void VulkanEngine::initSceneData()
 {
-	SceneData sceneData;
-	sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.f);
-	sceneData.view = _player.getViewMatrix();
-	sceneData.proj = glm::perspective(
+	_sceneData = SceneData{};
+	_sceneData.view = _player.getViewMatrix();
+	_sceneData.proj = glm::perspective(
 			glm::radians(70.f),
-			(float)_drawExtent.width / (float)_drawExtent.height,
+			(float)_windowExtent.width / (float)_windowExtent.height,
 			//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
 			0.1f, 10000.f);
-	sceneData.sunlightDirection = glm::vec4(2, -2, 2, 5);
-	sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
-	sceneData.viewProj = sceneData.view * sceneData.proj;
+	_sceneData.proj[1][1] *= -1;
+
+	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);
+	_sceneData.sunlightDirection = glm::vec4(2, -2, 2, 1);
+	_sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
+	_sceneData.viewProj = _sceneData.proj*_sceneData.view;
 }
 
 void VulkanEngine::initGround()
 {
-	//TODO
 	MeshAsset meshAsset{};
 
 	std::array<Vertex, 4> vertices{};
+	glm::vec4 color{ 0.07f,0.15f,0.09f,1.0f };
 	
-	vertices[0] = { glm::vec3(3, -2, 3), 1, glm::vec3(0, 1, 0), 1, glm::vec4(0.05f, 0.8f, 0.05f, 1.0f) };
-	vertices[1] = { glm::vec3(-3,-2,3), 0, glm::vec3(0,1,0), 1, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
-	vertices[2] = { glm::vec3(3,-2,-3), 1, glm::vec3(0,1,0), 0, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
-	vertices[3] = { glm::vec3(-3,-2,-3), 0, glm::vec3(0,1,0), 0, glm::vec4(0.05f,0.8f,0.05f, 1.0f) };
+	vertices[0] = { glm::vec3(30, -2, 30), 1, glm::vec3(0, 1, 0), 1, color };
+	vertices[1] = { glm::vec3(-30,-2,30), 0, glm::vec3(0,1,0), 1, color };
+	vertices[2] = { glm::vec3(30,-2,-30), 1, glm::vec3(0,1,0), 0, color };
+	vertices[3] = { glm::vec3(-30,-2,-30), 0, glm::vec3(0,1,0), 0, color };
 	
 	std::vector<uint32_t> indices{
 		0,3,1,

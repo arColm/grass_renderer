@@ -193,5 +193,8 @@
     <None Include="shaders\grass.vert">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\0_scene_data.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

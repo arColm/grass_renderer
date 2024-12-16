@@ -2,6 +2,7 @@
 
 #include "vk_types.hpp"
 #include "vk_loader.hpp"
+#include "vk_descriptors.hpp"
 #include "player.hpp"
 
 
@@ -46,6 +47,8 @@ public:
 		VkFence renderFence;
 
 		DeletionQueue deletionQueue;
+
+		DescriptorAllocatorGrowable descriptorAllocator;
 	};
 
 	bool _isInitialized{ false };
@@ -88,7 +91,7 @@ public:
 	float _renderScale = 1.f;
 
 	//shader descriptors
-	DescriptorAllocator globalDescriptorAllocator;
+	DescriptorAllocatorGrowable _globalDescriptorAllocator;
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
@@ -102,6 +105,7 @@ public:
 	VkPipeline _backgroundPipeline;
 
 	//mesh pipeline
+	VkDescriptorSetLayout _sceneDataDescriptorLayout;
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline _meshPipeline;
 
