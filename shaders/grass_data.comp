@@ -1,7 +1,7 @@
 #version 460
 layout (local_size_x = 64) in;
 
-layout(std430,set = 0, binding = 0) buffer data {
+layout(std140,set = 0, binding = 0) buffer data {
 	vec4 positions[];
 };
 
@@ -28,10 +28,10 @@ void main()
 
 	if(gl_GlobalInvocationID.x>=grassCount) return;
 	
-	int x = int(gl_GlobalInvocationID.x % grassPerRow);
-	int y = int(floor(gl_GlobalInvocationID.x / grassPerRow));
+	float x = (int(gl_GlobalInvocationID.x) % grassPerRow)/grassDensity;
+	float y = floor(gl_GlobalInvocationID.x / grassPerRow)/grassDensity;
 
 
-	positions[gl_GlobalInvocationID.x] = vec4(x,-2,y,0);
+	positions[int(gl_GlobalInvocationID.x)] = vec4(x,-2,y,0);
 
 }

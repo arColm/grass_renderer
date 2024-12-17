@@ -147,8 +147,8 @@ public:
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>> _meshAssets;
 
 	//grass
-	uint16_t _maxGrassDistance = 5;
-	uint16_t _grassDensity = 1;
+	int _maxGrassDistance = 5;
+	int _grassDensity = 1;
 	VkPipelineLayout _grassPipelineLayout;
 	VkPipeline _grassPipeline;
 	VkPipelineLayout _grassComputePipelineLayout;

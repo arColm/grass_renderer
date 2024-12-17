@@ -354,12 +354,12 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &grassDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _grassComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	//execute compute pipeline dispatch
-	vkCmdDispatch(cmd, std::ceil((_maxGrassDistance * 2 * _grassDensity + 1) / 64.0),
+	vkCmdDispatch(cmd, std::ceil((float)(grassCount) / 64.0),
 		1, 1);
 
 	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
+		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
+		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT_KHR);
 	getCurrentFrame().drawQueue.pushFunction(
 		[=, this](VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants) {
 
@@ -380,7 +380,7 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 
 			//draw _grassCount instances
 			vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
-
+			std::cout << grassCount << '\n';
 		}
 	);
 }
@@ -435,6 +435,14 @@ void VulkanEngine::run()
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL2_NewFrame();
 		ImGui::NewFrame();;
+
+		if (ImGui::Begin("grass"))
+		{
+			ImGui::SliderInt("density", &_grassDensity, 1, 100);
+			ImGui::SliderInt("distance", &_maxGrassDistance, 1, 100);
+
+			ImGui::End();
+		}
 
 		if (ImGui::Begin("stats"))
 		{

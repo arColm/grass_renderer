@@ -5,7 +5,7 @@
 
 #include "0_scene_data.glsl"
 
-layout (std430,set = 1, binding = 0) readonly buffer GrassData {
+layout (std140,set = 1, binding = 0) readonly buffer GrassData {
 	vec4 positions[];
 } grassData;
 
