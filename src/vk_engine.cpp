@@ -357,10 +357,12 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil((_maxGrassDistance * 2 * _grassDensity + 1) / 64.0),
 		1, 1);
 
+	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
+		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
 	getCurrentFrame().drawQueue.pushFunction(
 		[=, this](VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants) {
 
-			//vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0);
 			//grass rendering
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
 
@@ -372,8 +374,7 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 				grassDataDescriptorSet
 			};
 
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 1, 1, &grassDataDescriptorSet, 0, nullptr);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 2, sets, 0, nullptr);
 			vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &drawPushConstants);
 			vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 

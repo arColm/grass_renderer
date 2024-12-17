@@ -11,9 +11,9 @@ void vkutil::bufferBarrier(VkCommandBuffer cmd, VkBuffer buffer, VkDeviceSize si
 	bufferBarrier.pNext = nullptr;
 
 	bufferBarrier.srcStageMask = srcStageMask;
-	bufferBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+	bufferBarrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
 	bufferBarrier.dstStageMask = dstStageMask;
-	bufferBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+	bufferBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 
 	bufferBarrier.size = size;
 	bufferBarrier.offset = offset;
