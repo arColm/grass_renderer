@@ -99,6 +99,9 @@
     <ClCompile Include="src\noise.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\vk_buffers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="thirdparty\imgui\imconfig.h">
@@ -161,6 +164,9 @@
     <ClInclude Include="src\noise.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\vk_buffers.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\colored_triangle.frag">
@@ -194,6 +200,9 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="shaders\0_scene_data.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\grass_data.comp">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

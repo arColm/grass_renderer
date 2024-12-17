@@ -1,0 +1,37 @@
+#version 460
+layout (local_size_x = 64) in;
+
+layout(std430,set = 0, binding = 0) buffer data {
+	vec4 positions[];
+};
+
+
+
+//push constants block
+layout( push_constant ) uniform constants
+{
+	vec4 data1;
+	vec4 data2;
+	vec4 data3;
+	vec4 data4;
+} PushConstants;
+
+	
+void main()
+{
+	vec3 playerPosition = PushConstants.data1.xyz;
+	float grassCount = PushConstants.data2.x;
+	float grassDistance = PushConstants.data2.y;
+	float grassDensity = PushConstants.data2.z;
+
+	int grassPerRow = int(grassDistance*2*grassDensity + 1);
+
+	if(gl_GlobalInvocationID.x>=grassCount) return;
+	
+	int x = int(gl_GlobalInvocationID.x % grassPerRow);
+	int y = int(floor(gl_GlobalInvocationID.x / grassPerRow));
+
+
+	positions[gl_GlobalInvocationID.x] = vec4(x,-2,y,0);
+
+}

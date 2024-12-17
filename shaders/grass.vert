@@ -5,6 +5,10 @@
 
 #include "0_scene_data.glsl"
 
+layout (std430,set = 1, binding = 0) buffer GrassData {
+	vec4 positions[];
+} grassData;
+
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
@@ -29,7 +33,7 @@ layout( push_constant ) uniform constants
 
 void main() {
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	vec4 position = vec4(v.position, 1.0f);
+	vec4 position = vec4(v.position + grassData.positions[gl_InstanceIndex].xyz, 1.0f);
 
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * position;
 	//gl_Position = sceneData.viewProj * position;

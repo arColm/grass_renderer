@@ -24,6 +24,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtx/transform.hpp>
 #include "noise.hpp"
+#include "vk_buffers.hpp"
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -145,7 +146,9 @@ void VulkanEngine::draw()
 
 	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
+	
+	//calculate grass positions
+	calculateGrassData(cmd);
 	drawGeometry(cmd);
 
 	//prepare to copy drawimage to swapchain image
@@ -314,23 +317,71 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
 
+	getCurrentFrame().drawQueue.flush(sceneDataDescriptorSet,pushConstants);
 
-	{
-		//grass rendering
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
-
-		pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
-		pushConstants.worldMatrix = glm::translate(glm::vec3(1, -2, 0));
-
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
-		vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-		vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		//draw _grassCount instances
-		vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
-
-	}
 	vkCmdEndRendering(cmd);
+}
+
+void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
+{
+	uint32_t grassCount = (_maxGrassDistance * 2 * _grassDensity + 1);
+	grassCount *= grassCount; //squared
+	AllocatedBuffer grassDataBuffer = createBuffer(sizeof(GrassData) * grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+	//deletion
+	getCurrentFrame().deletionQueue.pushFunction(
+		[=,this]() {
+			destroyBuffer(grassDataBuffer);
+		}
+	);
+
+	//bind the gradient drawing compute pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipeline);
+
+	//TODO mayb we should just create a buffer every frame and fill it instead of storing in FrameData hmmm
+	//		then we dont have to update the framedata buffer AND this buffer when _grassCount changes.
+	VkDescriptorSet grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
+	DescriptorWriter writer;
+	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData)*grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.updateSet(_device, grassDataDescriptorSet);
+
+
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 1);
+	pushConstants.data2 = glm::vec4(grassCount, _maxGrassDistance, _grassDensity, 0);
+
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &grassDataDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _grassComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+	//execute compute pipeline dispatch
+	vkCmdDispatch(cmd, std::ceil((_maxGrassDistance * 2 * _grassDensity + 1) / 64.0),
+		1, 1);
+
+	getCurrentFrame().drawQueue.pushFunction(
+		[=, this](VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants) {
+
+			//vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0);
+			//grass rendering
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
+
+			drawPushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
+			//drawPushConstants.worldMatrix = glm::translate(glm::vec3(1, -2, 0));
+
+			VkDescriptorSet sets[] = {
+				sceneDataDescriptorSet,
+				grassDataDescriptorSet
+			};
+
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 1, 1, &grassDataDescriptorSet, 0, nullptr);
+			vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &drawPushConstants);
+			vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			//draw _grassCount instances
+			vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
+
+		}
+	);
 }
 
 void VulkanEngine::run()
@@ -696,6 +747,11 @@ void VulkanEngine::initSyncStructures()
 		vkDestroyFence(_device, _immFence, nullptr);
 	});
 
+	VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_grassSemaphore));
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroySemaphore(_device, _grassSemaphore, nullptr);
+		});
 }
 
 void VulkanEngine::createSwapchain(uint32_t width, uint32_t height, VkPresentModeKHR presentMode /*= VK_PRESENT_MODE_FIFO_KHR*/)
@@ -772,6 +828,11 @@ void VulkanEngine::initDescriptors()
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		_sceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		_grassDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+	}
 
 	//allocate a descriptor set for draw image
 	_drawImageDescriptors = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
@@ -806,6 +867,8 @@ void VulkanEngine::initDescriptors()
 	_mainDeletionQueue.pushFunction([&]() {
 		_globalDescriptorAllocator.destroyPools(_device);
 		vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(_device, _sceneDataDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(_device, _grassDataDescriptorLayout, nullptr);
 	});
 }
 
@@ -1035,14 +1098,17 @@ void VulkanEngine::initGrassPipeline()
 	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	//sets
-
+	VkDescriptorSetLayout layouts[] = {
+		_sceneDataDescriptorLayout,
+		_grassDataDescriptorLayout
+	};
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+	pipelineLayoutInfo.setLayoutCount = 2;
+	pipelineLayoutInfo.pSetLayouts = layouts;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_grassPipelineLayout));
 
@@ -1080,6 +1146,60 @@ void VulkanEngine::initGrassPipeline()
 	_mainDeletionQueue.pushFunction([&]() {
 		vkDestroyPipelineLayout(_device, _grassPipelineLayout, nullptr);
 		vkDestroyPipeline(_device, _grassPipeline, nullptr);
+		});
+
+	//COMPUTE
+
+	VkShaderModule computeShader;
+	if (!vkutil::loadShaderModule("./shaders/grass_data.comp.spv", _device, &computeShader))
+	{
+		fmt::print("error when building grass compute shader module\n");
+	}
+	else
+	{
+		fmt::print("grasscompute shader loaded\n");
+	}
+
+	//push constant range
+	VkPushConstantRange computeBufferRange{};
+	computeBufferRange.offset = 0;
+	computeBufferRange.size = sizeof(ComputePushConstants);
+	computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	//sets
+
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	computePipelineLayoutInfo.setLayoutCount = 1;
+	computePipelineLayoutInfo.pSetLayouts = &_grassDataDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_grassComputePipelineLayout));
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.pName = "main"; //name of entrypoint function
+	stageInfo.module = computeShader;
+
+	//create pipelines
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _grassComputePipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_grassComputePipeline));
+
+	//clean structures
+	vkDestroyShaderModule(_device, computeShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _grassComputePipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _grassComputePipeline, nullptr);
 		});
 }
 
@@ -1193,4 +1313,17 @@ void VulkanEngine::initGrass()
 			destroyBuffer(_grassMesh->meshBuffers.indexBuffer);
 		}
 	);
+
+	//grass data buffers
+	//for (int i = 0; i < FRAME_OVERLAP; i++)
+	//{
+	//	_frames[i].grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+	//	//deletion
+	//	_mainDeletionQueue.pushFunction(
+	//		[&, i]() {
+	//			destroyBuffer(_frames[i].grassDataBuffer);
+	//		}
+	//	);
+	//}
 }

@@ -38,6 +38,30 @@ public:
 			deletors.clear();
 		}
 	};
+	struct DrawQueue
+	{
+		typedef std::function<void(VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants)> drawCall;
+		//this structure stores a queue of functions which delete vulkan objects
+		//note: this is not optimal for large number of objects!
+		//		better is to store arrays of each object type (e.g. VkImage), and iterate through those and delete.
+		std::deque<drawCall> deletors;
+
+		void pushFunction(drawCall&& function)
+		{
+			deletors.push_back(function);
+		}
+
+		void flush(VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants)
+		{
+			//reverse iterate to execute all functions
+			for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
+			{
+				(*it)(sceneDataDescriptorSet,drawPushConstants);
+			}
+
+			deletors.clear();
+		}
+	};
 	struct FrameData
 	{
 		VkCommandPool commandPool;
@@ -47,8 +71,10 @@ public:
 		VkFence renderFence;
 
 		DeletionQueue deletionQueue;
+		DrawQueue drawQueue; // flushed at end of every frame to commit draws
 
 		DescriptorAllocatorGrowable descriptorAllocator;
+
 	};
 
 	bool _isInitialized{ false };
@@ -121,13 +147,14 @@ public:
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>> _meshAssets;
 
 	//grass
-	float _maxGrassDistance;
-	float _grassDensity;
-	int _grassCount = 1;
-	AllocatedBuffer _grassPositions;
+	uint16_t _maxGrassDistance = 5;
+	uint16_t _grassDensity = 1;
 	VkPipelineLayout _grassPipelineLayout;
 	VkPipeline _grassPipeline;
-	VkFence _grassFence;
+	VkPipelineLayout _grassComputePipelineLayout;
+	VkPipeline _grassComputePipeline;
+	VkDescriptorSetLayout _grassDataDescriptorLayout;
+	VkSemaphore _grassSemaphore;
 	std::shared_ptr<MeshAsset> _grassMesh;
 
 	//initializes everything in engine
@@ -141,6 +168,8 @@ public:
 	void drawBackground(VkCommandBuffer cmd);
 	void drawImGui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawGeometry(VkCommandBuffer cmd);
+
+	void calculateGrassData(VkCommandBuffer cmd);
 
 	//run main loop
 	void run();
