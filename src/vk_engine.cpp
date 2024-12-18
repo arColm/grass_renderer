@@ -324,9 +324,8 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 {
-	uint32_t grassCount = (_maxGrassDistance * 2 * _grassDensity + 1);
-	grassCount *= grassCount; //squared
-	AllocatedBuffer grassDataBuffer = createBuffer(sizeof(GrassData) * grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	_grassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);
+	AllocatedBuffer grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
 	//deletion
 	getCurrentFrame().deletionQueue.pushFunction(
@@ -342,19 +341,19 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	//		then we dont have to update the framedata buffer AND this buffer when _grassCount changes.
 	VkDescriptorSet grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
 	DescriptorWriter writer;
-	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData)*grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData)*_grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	writer.updateSet(_device, grassDataDescriptorSet);
 
 
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 1);
-	pushConstants.data2 = glm::vec4(grassCount, _maxGrassDistance, _grassDensity, 0);
+	pushConstants.data2 = glm::vec4(_grassCount, _maxGrassDistance, _grassDensity, 0);
 
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &grassDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _grassComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	//execute compute pipeline dispatch
-	vkCmdDispatch(cmd, std::ceil((float)(grassCount) / 64.0),
+	vkCmdDispatch(cmd, std::ceil((float)(_grassCount) / 64.0),
 		1, 1);
 
 	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
@@ -379,8 +378,7 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 			vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			//draw _grassCount instances
-			vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
-			std::cout << grassCount << '\n';
+			vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
 		}
 	);
 }
@@ -395,13 +393,13 @@ void VulkanEngine::run()
 	while (!bQuit)
 	{
 		auto tickTime = std::chrono::high_resolution_clock::now();
-		auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(tickTime-lastTickTime);
+		auto elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(tickTime-lastTickTime);
 		lastTickTime = tickTime;
 
-		float deltaTime = elapsedTime.count() / 1000.f;
+		float deltaTime = elapsedTime.count() / 1000000.f;
 
-		_engineStats.frameTime = elapsedTime.count();
-		_engineStats.fps = 1000.f / _engineStats.frameTime;
+		_engineStats.frameTime = deltaTime * 1000.f;
+		_engineStats.fps = 1 / deltaTime;
 
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -440,6 +438,7 @@ void VulkanEngine::run()
 		{
 			ImGui::SliderInt("density", &_grassDensity, 1, 100);
 			ImGui::SliderInt("distance", &_maxGrassDistance, 1, 100);
+			ImGui::Text("grassCount: %d", _grassCount);
 
 			ImGui::End();
 		}

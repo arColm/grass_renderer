@@ -19,7 +19,7 @@ layout( push_constant ) uniform constants
 	
 void main()
 {
-	vec3 playerPosition = PushConstants.data1.xyz;
+	vec3 playerPosition = floor(PushConstants.data1.xyz);
 	float grassCount = PushConstants.data2.x;
 	float grassDistance = PushConstants.data2.y;
 	float grassDensity = PushConstants.data2.z;
@@ -32,6 +32,6 @@ void main()
 	float y = floor(gl_GlobalInvocationID.x / grassPerRow)/grassDensity;
 
 
-	positions[int(gl_GlobalInvocationID.x)] = vec4(x,-2,y,0);
+	positions[int(gl_GlobalInvocationID.x)] = vec4(x,0,y,0)-vec4(grassDistance,2,grassDistance,0) +vec4(playerPosition,0);
 
 }
