@@ -300,6 +300,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	projection[1][1] *= -1; //invert y -axis
 	//pushConstants.worldMatrix = projection * view;
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
+	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;

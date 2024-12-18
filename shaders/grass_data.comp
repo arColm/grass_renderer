@@ -16,10 +16,56 @@ layout( push_constant ) uniform constants
 	vec4 data4;
 } PushConstants;
 
+// 2D Random
+float random (in vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))
+                 * 43758.5453123);
+}
+
+// 2D Noise based on Morgan McGuire @morgan3d
+// https://www.shadertoy.com/view/4dS3Wd
+float noise (in vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    // Four corners in 2D of a tile
+    float a = random(i);
+    float b = random(i + vec2(1.0, 0.0));
+    float c = random(i + vec2(0.0, 1.0));
+    float d = random(i + vec2(1.0, 1.0));
+
+    // Smooth Interpolation
+
+    // Cubic Hermine Curve.  Same as SmoothStep()
+    vec2 u = f*f*(3.0-2.0*f);
+    // u = smoothstep(0.,1.,f);
+
+    // Mix 4 coorners percentages
+    return mix(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
+}
 	
+float layeredNoise(vec2 p, int octaves) {
+    float n = 0;
+    float amplitude = 1.0;
+    float persistence = 1.0;
+    float maxAmplitude = 0.0;
+
+    for(int i=0;i<octaves;i++) {
+        maxAmplitude += amplitude;
+        n+= noise(p*persistence) * amplitude;
+        //amplitude *= 0.3;
+        amplitude *= 0.2;
+        persistence *= 2;
+    }
+    return n /maxAmplitude;
+}
+
 void main()
 {
-	vec3 playerPosition = floor(PushConstants.data1.xyz);
+	vec3 playerPosition = PushConstants.data1.xyz;
 	float grassCount = PushConstants.data2.x;
 	float grassDistance = PushConstants.data2.y;
 	float grassDensity = PushConstants.data2.z;
@@ -31,7 +77,16 @@ void main()
 	float x = (int(gl_GlobalInvocationID.x) % grassPerRow)/grassDensity;
 	float y = floor(gl_GlobalInvocationID.x / grassPerRow)/grassDensity;
 
+	float distanceFromCenterSq = ((x-grassDistance)*(x-grassDistance)+(y-grassDistance)*(y-grassDistance))/(grassDistance*grassDistance);
 
-	positions[int(gl_GlobalInvocationID.x)] = vec4(x,0,y,0)-vec4(grassDistance,2,grassDistance,0) +vec4(playerPosition,0);
+	vec4 offset = vec4(-grassDistance, -2,-grassDistance, 0);
+
+	vec4 position = vec4(x,0,y,0)+offset +vec4(floor(playerPosition),0);
+
+	float distanceToPlayer = distance(position.xyz,playerPosition);
+	position += vec4(0,mix(0,-1,distanceToPlayer/grassDistance),0,0);
+    position += vec4(layeredNoise(position.xz,3),0,layeredNoise(position.xz,2),0)/grassDensity;
+
+	positions[int(gl_GlobalInvocationID.x)] = position;
 
 }

@@ -25,6 +25,7 @@ layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
 	VertexBuffer vertexBuffer;
+	vec4 playerPosition;
 } PushConstants;
 
 void main() {
