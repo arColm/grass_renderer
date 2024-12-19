@@ -24,8 +24,8 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
-	VertexBuffer vertexBuffer;
 	vec4 playerPosition;
+	VertexBuffer vertexBuffer;
 } PushConstants;
 
 void main() {

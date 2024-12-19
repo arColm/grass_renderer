@@ -28,15 +28,33 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
-	VertexBuffer vertexBuffer;
 	vec4 playerPosition;
+	VertexBuffer vertexBuffer;
+
 } PushConstants;
+
+
+mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
+	mat3 matrix;
+	a.y = 0;
+	b.y =0 ;
+	float c = dot(a,b);
+	//float s = length(cross(a,b));
+	float s =  a.z * b.x - a.x * b.z;
+	matrix[0] = vec3(c,0,-s);
+	matrix[1] = vec3(0,1,0);
+	matrix[2] = vec3(s,0,c);
+	return matrix;
+}
 
 void main() {
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	vec4 position = vec4(v.position + grassData.positions[gl_InstanceIndex].xyz, 1.0f);
+	vec3 relativePosition = getGrassRotationMatrix(v.normal,normalize(PushConstants.playerPosition.xyz-grassData.positions[gl_InstanceIndex].xyz)) * v.position;
+	vec3 position = relativePosition + grassData.positions[gl_InstanceIndex].xyz;
 
-	gl_Position = sceneData.viewProj * PushConstants.render_matrix * position;
+	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;
+
+	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);
 	//gl_Position = sceneData.viewProj * position;
 
 	outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;

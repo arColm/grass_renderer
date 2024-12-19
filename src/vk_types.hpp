@@ -42,8 +42,9 @@ struct Vertex
 struct GPUDrawPushConstants
 {
     glm::mat4 worldMatrix;
-    VkDeviceAddress vertexBuffer;
     glm::vec4 playerPosition;
+    VkDeviceAddress vertexBuffer;
+    //glm::vec2 empty = glm::vec2(0);
 };
 
 struct AllocatedImage

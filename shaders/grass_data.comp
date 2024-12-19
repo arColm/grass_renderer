@@ -47,10 +47,10 @@ float noise (in vec2 st) {
             (d - b) * u.x * u.y;
 }
 	
-float layeredNoise(vec2 p, int octaves) {
+float layeredNoise(vec2 p, int octaves, float initialPersistence) {
     float n = 0;
     float amplitude = 1.0;
-    float persistence = 1.0;
+    float persistence = initialPersistence; //1.0
     float maxAmplitude = 0.0;
 
     for(int i=0;i<octaves;i++) {
@@ -75,17 +75,17 @@ void main()
 	if(gl_GlobalInvocationID.x>=grassCount) return;
 	
 	float x = (int(gl_GlobalInvocationID.x) % grassPerRow)/grassDensity;
-	float y = floor(gl_GlobalInvocationID.x / grassPerRow)/grassDensity;
+	float z = floor(gl_GlobalInvocationID.x / grassPerRow)/grassDensity;
 
-	float distanceFromCenterSq = ((x-grassDistance)*(x-grassDistance)+(y-grassDistance)*(y-grassDistance))/(grassDistance*grassDistance);
+	float distanceFromCenterSq = ((x-grassDistance)*(x-grassDistance)+(z-grassDistance)*(z-grassDistance))/(grassDistance*grassDistance);
 
 	vec4 offset = vec4(-grassDistance, -2,-grassDistance, 0);
 
-	vec4 position = vec4(x,0,y,0)+offset +vec4(floor(playerPosition),0);
+	vec4 position = vec4(x,0,z,0)+offset +vec4(floor(playerPosition.x),0,floor(playerPosition.z),0);
 
-	float distanceToPlayer = distance(position.xyz,playerPosition);
-	position += vec4(0,mix(0,-1,distanceToPlayer/grassDistance),0,0);
-    position += vec4(layeredNoise(position.xz,3),0,layeredNoise(position.xz,2),0)/grassDensity;
+	float distanceToPlayer = distance(position.xyz,vec3(playerPosition.x,0,playerPosition.z));
+	position += vec4(0,mix(0,-1,distanceToPlayer/grassDistance) + 0.5*layeredNoise(position.xz,1,1),0,0);
+    position += vec4(layeredNoise(position.xz,4,1),0,layeredNoise(position.xz,2,1.5),0);
 
 	positions[int(gl_GlobalInvocationID.x)] = position;
 

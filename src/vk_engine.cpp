@@ -290,7 +290,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	//draw mesh
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
-	GPUDrawPushConstants pushConstants;
+	GPUDrawPushConstants pushConstants{};
 	glm::mat4 view = _player.getViewMatrix();
 	glm::mat4 projection = glm::perspective(
 		glm::radians(70.f),
@@ -1282,16 +1282,18 @@ void VulkanEngine::initGrass()
 
 	std::array<Vertex, 9> vertices{};
 	glm::vec4 color{ 0.07f,0.23f,0.09f,1.0f };
+	glm::vec3 normal(0, 0, -1);
+	float grassWidth = 0.03f;
 
-	vertices[0] = { glm::vec3(0.05f, 0,0), 1, glm::vec3(0, 0, -1), 1, color * 1.2f };
-	vertices[1] = { glm::vec3(-0.05f,0,0), 0, glm::vec3(0, 0, -1), 1, color * 1.3f };
-	vertices[2] = { glm::vec3(0.05f, 0.3f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.4f };
-	vertices[3] = { glm::vec3(-0.05f,0.3f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.5f };
-	vertices[4] = { glm::vec3(0.05f, 0.6f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.6f };
-	vertices[5] = { glm::vec3(-0.05f,0.6f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.7f };
-	vertices[6] = { glm::vec3(0.05f, 0.9f, 0), 1, glm::vec3(0, 0, -1), 1, color * 1.8f };
-	vertices[7] = { glm::vec3(-0.05f,0.9f, 0), 0, glm::vec3(0, 0, -1), 1, color * 1.9f };
-	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, glm::vec3(0, 0, -1), 1, color*2.f };
+	vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, color * 1.2f };
+	vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, color * 1.3f };
+	vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, color * 1.4f };
+	vertices[3] = { glm::vec3(-grassWidth,0.3f, 0), 0, normal, 1, color * 1.5f };
+	vertices[4] = { glm::vec3(grassWidth, 0.6f, 0), 1, normal, 1, color * 1.6f };
+	vertices[5] = { glm::vec3(-grassWidth,0.6f, 0), 0, normal, 1, color * 1.7f };
+	vertices[6] = { glm::vec3(grassWidth, 0.9f, 0), 1, normal, 1, color * 1.8f };
+	vertices[7] = { glm::vec3(-grassWidth,0.9f, 0), 0, normal, 1, color * 1.9f };
+	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, color*2.f };
 
 	std::vector<uint32_t> indices{
 		0,3,1,

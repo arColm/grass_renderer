@@ -38,6 +38,12 @@ void Player::processSDLEvent(SDL_Event& e, float deltaTime)
         case(SDLK_d):
             _velocity.x = _movementSpeed;
             break;
+        case(SDLK_LCTRL):
+            _velocity.y = -_movementSpeed;
+            break;
+        case(SDLK_SPACE):
+            _velocity.y = _movementSpeed;
+            break;
         default:
             break;
         }
@@ -57,6 +63,12 @@ void Player::processSDLEvent(SDL_Event& e, float deltaTime)
             break;
         case(SDLK_d):
             _velocity.x = 0;
+            break;
+        case(SDLK_LCTRL):
+            _velocity.y = 0;
+            break;
+        case(SDLK_SPACE):
+            _velocity.y = 0;
             break;
         default:
             break;
@@ -79,7 +91,7 @@ void Player::move(float deltaTime)
 {
     glm::mat4 cameraRotation = getRotationMatrix();
     glm::vec3 d = glm::vec3(cameraRotation * glm::vec4(_velocity * deltaTime, 0.f));
-    d.y = 0;
+    d.y = _velocity.y * deltaTime;
     _position += d;
 }
 
