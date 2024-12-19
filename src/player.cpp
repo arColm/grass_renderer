@@ -70,12 +70,18 @@ void Player::processSDLEvent(SDL_Event& e, float deltaTime)
         case(SDLK_SPACE):
             _velocity.y = 0;
             break;
+        case(SDLK_LALT):
+            if (SDL_GetRelativeMouseMode() == SDL_TRUE)
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+            else
+                SDL_SetRelativeMouseMode(SDL_TRUE);
+            break;
         default:
             break;
         }
     }
 
-    if (e.type == SDL_MOUSEMOTION)
+    if (e.type == SDL_MOUSEMOTION && SDL_GetRelativeMouseMode() == SDL_TRUE)
     {
         _yaw += (float)e.motion.xrel * deltaTime * _sensitivity;
         _pitch -= (float)e.motion.yrel * deltaTime * _sensitivity;
@@ -90,7 +96,9 @@ void Player::update(float deltaTime)
 void Player::move(float deltaTime)
 {
     glm::mat4 cameraRotation = getRotationMatrix();
-    glm::vec3 d = glm::vec3(cameraRotation * glm::vec4(_velocity * deltaTime, 0.f));
+    glm::vec3 v = _velocity;
+    v.y = 0;
+    glm::vec3 d = glm::vec3(cameraRotation * glm::vec4(v * deltaTime, 0.f));
     d.y = _velocity.y * deltaTime;
     _position += d;
 }

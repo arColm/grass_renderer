@@ -37,6 +37,7 @@ void VulkanEngine::init()
 
 	//initialize SDL window
 	SDL_Init(SDL_INIT_VIDEO);
+	SDL_SetRelativeMouseMode(SDL_TRUE);
 
 	SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
@@ -309,7 +310,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+	//vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
 
 	//draw ground
@@ -390,7 +391,6 @@ void VulkanEngine::run()
 	bool bQuit = false;
 
 	auto lastTickTime = std::chrono::high_resolution_clock::now();
-
 	while (!bQuit)
 	{
 		auto tickTime = std::chrono::high_resolution_clock::now();

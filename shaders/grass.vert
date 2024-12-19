@@ -49,7 +49,8 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 
 void main() {
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	vec3 relativePosition = getGrassRotationMatrix(v.normal,normalize(PushConstants.playerPosition.xyz-grassData.positions[gl_InstanceIndex].xyz)) * v.position;
+	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,normalize(PushConstants.playerPosition.xyz-grassData.positions[gl_InstanceIndex].xyz));
+	vec3 relativePosition = rotationTowardsPlayer * v.position;
 	vec3 position = relativePosition + grassData.positions[gl_InstanceIndex].xyz;
 
 	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;

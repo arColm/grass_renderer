@@ -158,6 +158,17 @@ public:
 	VkSemaphore _grassSemaphore;
 	std::shared_ptr<MeshAsset> _grassMesh;
 
+	//terrain TODO
+	int _renderDistance = 1;
+	AllocatedImage _heightMapImage;
+
+	//wind TODO
+	AllocatedImage _windMapImage;
+
+	//shadowmap TODO
+	AllocatedImage _shadowMapImage;
+
+
 	//initializes everything in engine
 	void init();
 
