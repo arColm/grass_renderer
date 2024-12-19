@@ -147,6 +147,8 @@ VkImageViewCreateInfo vkinit::imageViewCreateInfo(VkFormat format, VkImage image
 	info.subresourceRange.layerCount = 1;
 	info.subresourceRange.aspectMask = aspectFlags;
 
+	//COMPONENTS used for swizzling (identity is default)
+
 	return info;
 }
 

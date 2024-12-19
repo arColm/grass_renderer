@@ -1,0 +1,31 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+
+layout(buffer_reference, std430) writeonly buffer IndexBuffer {
+	int indices[];
+};
+
+layout( push_constant ) uniform constants
+{
+	IndexBuffer indexBuffer;
+} PushConstants;
+
+
+void main() {
+	int startIndex = gl_GlobalInvocationID * 6;
+	int size = PushConstants.indexBuffer.length;
+
+	if(startIndex>=size) return;
+	
+	if(texelCoord.x < size.x && texelCoord.y < size.y)
+	{
+		vec3 normal = vec3(0);
+
+		float height = sin(float(texelCoord.x)/10) + cos(float(texelCoord.y)/10);
+
+		imageStore(data, texelCoord, vec4(normal,height));
+	}
+}

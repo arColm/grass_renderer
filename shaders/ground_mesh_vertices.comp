@@ -1,0 +1,34 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+#include "_vertex.glsl"
+
+layout(rgba16f, set = 0, binding = 0) uniform image2D heightMap;
+
+layout(buffer_reference, std430) writeonly buffer VertexBuffer {
+	Vertex vertices[];
+};
+
+
+layout( push_constant ) uniform constants
+{
+	VertexBuffer vertexBuffer;
+} PushConstants;
+
+void main() {
+	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+	int size = PushConstants.vertexBuffer.length;
+
+	
+	if(texelCoord.x < size.x && texelCoord.y < size.y)
+	{
+		vec3 normal = vec3(0);
+
+		float height = sin(float(texelCoord.x)/10) + cos(float(texelCoord.y)/10);
+
+		imageStore(data, texelCoord, vec4(normal,height));
+	}
+}

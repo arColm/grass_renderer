@@ -205,5 +205,17 @@
     <None Include="shaders\grass_data.comp">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\heightmap.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\_vertex.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\ground_mesh_indices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\ground_mesh_vertices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

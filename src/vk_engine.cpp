@@ -26,6 +26,8 @@
 #include "noise.hpp"
 #include "vk_buffers.hpp"
 
+const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
+
 VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
@@ -310,7 +312,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	//vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
 
 	//draw ground
@@ -321,38 +323,48 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	getCurrentFrame().drawQueue.flush(sceneDataDescriptorSet,pushConstants);
 
+
 	vkCmdEndRendering(cmd);
 }
 
 void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 {
-	_grassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);
-	AllocatedBuffer grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	_settingsChanged = false;
+	int newGrassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);
+	AllocatedBuffer grassDataBuffer;
+	if (true)
+	{
+		//TODO only allocate new buffer when grass count changes
+		_grassCount = newGrassCount;
+		grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-	//deletion
-	getCurrentFrame().deletionQueue.pushFunction(
-		[=,this]() {
-			destroyBuffer(grassDataBuffer);
-		}
-	);
-
-	//bind the gradient drawing compute pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipeline);
-
+		//deletion
+		getCurrentFrame().deletionQueue.pushFunction(
+			[=, this]() {
+				destroyBuffer(grassDataBuffer);
+			}
+		);
+	}
+	else
+	{
+		grassDataBuffer = _grassDataBuffer;
+	}
 	//TODO mayb we should just create a buffer every frame and fill it instead of storing in FrameData hmmm
 	//		then we dont have to update the framedata buffer AND this buffer when _grassCount changes.
-	VkDescriptorSet grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
+	_grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
 	DescriptorWriter writer;
-	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData)*_grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-	writer.updateSet(_device, grassDataDescriptorSet);
+	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData) * _grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.updateSet(_device, _grassDataDescriptorSet);
 
 
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 1);
 	pushConstants.data2 = glm::vec4(_grassCount, _maxGrassDistance, _grassDensity, 0);
 
+	//bind the gradient drawing compute pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipeline);
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &grassDataDescriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &_grassDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _grassComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	//execute compute pipeline dispatch
 	vkCmdDispatch(cmd, std::ceil((float)(_grassCount) / 64.0),
@@ -361,9 +373,14 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
 		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
 		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT_KHR);
+	
+
+
+
+
+
 	getCurrentFrame().drawQueue.pushFunction(
 		[=, this](VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants) {
-
 			//grass rendering
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
 
@@ -372,7 +389,7 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 
 			VkDescriptorSet sets[] = {
 				sceneDataDescriptorSet,
-				grassDataDescriptorSet
+				_grassDataDescriptorSet
 			};
 
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 2, sets, 0, nullptr);
@@ -441,6 +458,9 @@ void VulkanEngine::run()
 			ImGui::SliderInt("distance", &_maxGrassDistance, 1, 100);
 			ImGui::Text("grassCount: %d", _grassCount);
 
+			if (ImGui::Button("Apply Changes"))
+				_settingsChanged = true;
+
 			ImGui::End();
 		}
 
@@ -451,6 +471,7 @@ void VulkanEngine::run()
 
 			ImGui::End();
 		}
+
 
 
 		ImGui::Render();
@@ -755,12 +776,6 @@ void VulkanEngine::initSyncStructures()
 	_mainDeletionQueue.pushFunction([&]() {
 		vkDestroyFence(_device, _immFence, nullptr);
 	});
-
-	VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_grassSemaphore));
-
-	_mainDeletionQueue.pushFunction([&]() {
-		vkDestroySemaphore(_device, _grassSemaphore, nullptr);
-		});
 }
 
 void VulkanEngine::createSwapchain(uint32_t width, uint32_t height, VkPresentModeKHR presentMode /*= VK_PRESENT_MODE_FIFO_KHR*/)
@@ -1216,6 +1231,7 @@ void VulkanEngine::initDefaultData()
 {
 	//load meshes
 	testMeshes = loadGltfMeshes(this, "./assets/basicmesh.glb").value();
+	initHeightMap();
 	initGround();
 	initGrass();
 }
@@ -1258,6 +1274,90 @@ void VulkanEngine::initGround()
 	surfaces.resize(1);
 	surfaces[0].count = static_cast<uint32_t>(indices.size());
 	surfaces[0].startIndex = static_cast<uint32_t>(0);
+	//
+
+	const size_t vertexBufferSize = (_renderDistance*2) * (_renderDistance*2);
+	const size_t indexBufferSize = (_renderDistance * 2 - 1) * (_renderDistance * 2 - 1) * 6;
+	AllocatedBuffer vertexBuffer = createBuffer(vertexBufferSize * sizeof(Vertex),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+	AllocatedBuffer indexBuffer = createBuffer(indexBufferSize * sizeof(uint32_t),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+
+	//	PIPELINE
+	VkShaderModule vertexComputeShader;
+	if (!vkutil::loadShaderModule("./shaders/ground_mesh_vertices.comp.spv", _device, &vertexComputeShader))
+	{
+		fmt::print("error when building ground mesh vertex compute shader module\n");
+	}
+	else
+	{
+		fmt::print("ground mesh compute shader loaded\n");
+	}
+
+	//push constant range
+	//VkPushConstantRange computeBufferRange{};
+	//computeBufferRange.offset = 0;
+	//computeBufferRange.size = sizeof(ComputePushConstants);
+	//computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	//sets
+
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	//computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	//computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	//computePipelineLayoutInfo.setLayoutCount = 1;
+	//computePipelineLayoutInfo.pSetLayouts = &_heightMapDescriptorLayout;
+
+	//VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_heightMapComputePipelineLayout));
+
+	//VkPipelineShaderStageCreateInfo stageInfo{};
+	//stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	//stageInfo.pNext = nullptr;
+	//stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	//stageInfo.pName = "main"; //name of entrypoint function
+	//stageInfo.module = computeShader;
+
+	////create pipelines
+	//VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	//computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	//computePipelineCreateInfo.pNext = nullptr;
+	//computePipelineCreateInfo.layout = _heightMapComputePipelineLayout;
+	//computePipelineCreateInfo.stage = stageInfo;
+
+	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_heightMapComputePipeline));
+
+	////clean structures
+	//vkDestroyShaderModule(_device, computeShader, nullptr);
+
+	//_mainDeletionQueue.pushFunction([&]() {
+	//	vkDestroyPipelineLayout(_device, _heightMapComputePipelineLayout, nullptr);
+	//	vkDestroyPipeline(_device, _heightMapComputePipeline, nullptr);
+	//	});
+
+	//immediateSubmit(
+	//	[&](VkCommandBuffer cmd) {
+	//	}
+	//);
+
+
+
+
+
+
+	VkBufferDeviceAddressInfo vertexBufferAddressInfo{};
+	vertexBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	vertexBufferAddressInfo.pNext = nullptr;
+	vertexBufferAddressInfo.buffer = vertexBuffer.buffer;
+
+	GPUMeshBuffers meshBuffers{};
+	//meshBuffers.indexBuffer = ;
+	//meshBuffers.vertexBuffer = ;
+	//meshBuffers.vertexBufferAddress = ;
 
 
 	meshAsset.name = "ground";
@@ -1268,10 +1368,19 @@ void VulkanEngine::initGround()
 	//_meshAssets["ground"] = std::make_shared<MeshAsset>(std::move(meshAsset));
 	_groundMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
 
+
+	//vkDestroyShaderModule(_device, vertexComputeShader, nullptr);
 	_mainDeletionQueue.pushFunction(
 		[&]() {
 			destroyBuffer(_groundMesh->meshBuffers.vertexBuffer);
 			destroyBuffer(_groundMesh->meshBuffers.indexBuffer);
+
+		}
+	);
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			destroyBuffer(vertexBuffer);
+			destroyBuffer(indexBuffer);
 		}
 	);
 }
@@ -1337,4 +1446,119 @@ void VulkanEngine::initGrass()
 	//		}
 	//	);
 	//}
+}
+
+void VulkanEngine::initHeightMap()
+{
+	//create image
+	VkExtent3D imageExtent = {
+		HEIGHT_MAP_SIZE,
+		HEIGHT_MAP_SIZE,
+		1
+	};
+
+	//hardcoding draw format to 32 bit float
+	_heightMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_heightMapImage.imageExtent = imageExtent;
+
+	VkImageUsageFlags imageUsageFlags{};
+	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_heightMapImage.imageFormat, imageUsageFlags, imageExtent);
+
+	//allocate draw image from gpu memory
+	VmaAllocationCreateInfo imgAllocInfo{};
+	imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+	//allocate and create image
+	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_heightMapImage.image, &_heightMapImage.allocation, nullptr);
+
+	//build image view for the draw image to use for rendering
+	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_heightMapImage.imageFormat, _heightMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_heightMapImage.imageView));
+
+	//add to deletion queues
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _heightMapImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _heightMapImage.image, _heightMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+		});
+
+	// DESCRIPTORS
+	//	descriptor layout
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		_heightMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
+
+	//	writing to descriptor set
+	_heightMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
+	DescriptorWriter writer;
+	writer.writeImage(0, _heightMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.updateSet(_device, _heightMapDescriptorSet);
+
+	//	PIPELINE
+	VkShaderModule computeShader;
+	if (!vkutil::loadShaderModule("./shaders/heightmap.comp.spv", _device, &computeShader))
+	{
+		fmt::print("error when building heightmap compute shader module\n");
+	}
+	else
+	{
+		fmt::print("heightmap compute shader loaded\n");
+	}
+
+	//push constant range
+	//VkPushConstantRange computeBufferRange{};
+	//computeBufferRange.offset = 0;
+	//computeBufferRange.size = sizeof(ComputePushConstants);
+	//computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	//sets
+
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	//computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	//computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	computePipelineLayoutInfo.setLayoutCount = 1;
+	computePipelineLayoutInfo.pSetLayouts = &_heightMapDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_heightMapComputePipelineLayout));
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.pName = "main"; //name of entrypoint function
+	stageInfo.module = computeShader;
+
+	//create pipelines
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _heightMapComputePipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_heightMapComputePipeline));
+
+	//clean structures
+	vkDestroyShaderModule(_device, computeShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _heightMapComputePipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _heightMapComputePipeline, nullptr);
+		});
+
+	immediateSubmit(
+		[&](VkCommandBuffer cmd) {
+			vkutil::transitionImage(cmd, _heightMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _heightMapComputePipeline);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _heightMapComputePipelineLayout, 0, 1, &_heightMapDescriptorSet, 0, nullptr);
+			vkCmdDispatch(cmd, std::ceil(HEIGHT_MAP_SIZE / 16.0f), std::ceil(HEIGHT_MAP_SIZE / 16.0f), 1);
+		}
+	);
 }

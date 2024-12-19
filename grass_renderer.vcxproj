@@ -192,10 +192,14 @@
     <None Include="shaders\gradient_color.comp" />
     <None Include="shaders\grass.vert" />
     <None Include="shaders\grass_data.comp" />
+    <None Include="shaders\ground_mesh_indices.comp" />
+    <None Include="shaders\ground_mesh_vertices.comp" />
+    <None Include="shaders\heightmap.comp" />
     <None Include="shaders\input_structures.glsl" />
     <None Include="shaders\mesh.frag" />
     <None Include="shaders\mesh.vert" />
     <None Include="shaders\sky.comp" />
+    <None Include="shaders\_vertex.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

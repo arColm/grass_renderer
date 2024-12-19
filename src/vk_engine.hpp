@@ -147,6 +147,7 @@ public:
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>> _meshAssets;
 
 	//grass
+	bool _settingsChanged = true;
 	int _grassCount = 0;
 	int _maxGrassDistance = 5;
 	int _grassDensity = 1;
@@ -155,12 +156,19 @@ public:
 	VkPipelineLayout _grassComputePipelineLayout;
 	VkPipeline _grassComputePipeline;
 	VkDescriptorSetLayout _grassDataDescriptorLayout;
-	VkSemaphore _grassSemaphore;
+	VkDescriptorSet _grassDataDescriptorSet;
+	AllocatedBuffer _grassDataBuffer;
 	std::shared_ptr<MeshAsset> _grassMesh;
 
 	//terrain TODO
+	//	heightMap.xyz = normal, heightMap.a = height
 	int _renderDistance = 1;
+	static const int HEIGHT_MAP_SIZE;
 	AllocatedImage _heightMapImage;
+	VkPipelineLayout _heightMapComputePipelineLayout;
+	VkPipeline _heightMapComputePipeline;
+	VkDescriptorSetLayout _heightMapDescriptorLayout;
+	VkDescriptorSet _heightMapDescriptorSet;
 
 	//wind TODO
 	AllocatedImage _windMapImage;
@@ -223,5 +231,6 @@ private:
 	//scene
 	void initGround();
 	void initGrass();
+	void initHeightMap();
 
 };
