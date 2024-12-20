@@ -45,3 +45,20 @@ float layeredNoise(vec2 p, int octaves, float initialPersistence) {
     }
     return n /maxAmplitude;
 }
+
+
+float layeredNoise(vec2 p, int octaves, float initialFrequency, float lacunarity, float persistence) {
+    float n = 0;
+    float amplitude = 1.0;
+    float frequency = initialFrequency; //1.0
+    float maxAmplitude = 0.0;
+
+    for(int i=0;i<octaves;i++) {
+        maxAmplitude += amplitude;
+        n+= noise(p*frequency) * amplitude;
+        //amplitude *= 0.3;
+        amplitude *= persistence;
+        frequency *= lacunarity;
+    }
+    return n /maxAmplitude;
+}

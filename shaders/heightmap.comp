@@ -7,6 +7,9 @@ layout(rgba16f,set = 0, binding = 0) uniform image2D data;
 #include "noise.glsl"
 
 
+float getHeight(vec2 coord) {
+	return 5*layeredNoise(coord,3,0.1,2,1.1);
+}
 
 void main() {
 	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -15,10 +18,26 @@ void main() {
 	
 	if(texelCoord.x < size.x && texelCoord.y < size.y)
 	{
-		vec3 normal = vec3(0,1,0);
+		//float height = 5*layeredNoise(vec2(texelCoord)/10,7,1.0);
+		float height = getHeight(texelCoord);
 
-		//float height = abs(10*sin(float(texelCoord.x)/10) + 10*cos(float(texelCoord.y)/10));
-		float height = 5*layeredNoise(vec2(texelCoord)/10,3,1.0);
+		//	  T
+		//	L O R
+		//	  B
+		// Consider writing a second compute shader for this isntead, which samples the heightmap to determine heights
+		// idk if a second dispatch call is more expensive than calculating the height 4 more times, will have to profile
+		// but likely doesnt matter because this only runs in initialization
+		// also this conveniently handles edges
+		float T = getHeight(texelCoord+vec2(0,1));
+		float B = getHeight(texelCoord+vec2(0,-1));
+		float L = getHeight(texelCoord+vec2(-1,0));
+		float R = getHeight(texelCoord+vec2(1,0));
+
+		vec3 horizontal = vec3(2,R-L,0);
+		vec3 vertical = vec3(0,B-T,2);
+
+		vec3 normal = normalize(cross(vertical,horizontal));
+
 
 		imageStore(data, texelCoord, vec4(normal,height));
 	}
