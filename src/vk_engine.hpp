@@ -115,6 +115,7 @@ public:
 	AllocatedImage _noiseImage;
 	VkExtent2D _drawExtent;
 	float _renderScale = 1.f;
+	VkSampler _defaultSampler;
 
 	//shader descriptors
 	DescriptorAllocatorGrowable _globalDescriptorAllocator;
@@ -169,6 +170,8 @@ public:
 	VkPipeline _heightMapComputePipeline;
 	VkDescriptorSetLayout _heightMapDescriptorLayout;
 	VkDescriptorSet _heightMapDescriptorSet;
+	VkImageView _heightMapDebugImageView;
+	VkDescriptorSet _heightMapSamplerDescriptorSet;
 
 	//wind TODO
 	AllocatedImage _windMapImage;
@@ -219,6 +222,8 @@ private:
 
 	void initPipelines();
 	void initBackgroundPipelines();
+
+	void initSampler();
 
 	void initImGui();
 

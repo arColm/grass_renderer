@@ -7,8 +7,10 @@ layout(rgba16f,set = 0, binding = 0) uniform image2D data;
 #include "noise.glsl"
 
 
+
+
 float getHeight(vec2 coord) {
-	return 5*layeredNoise(coord,3,0.1,2,1.1);
+	return layeredNoise(coord,3,0.1,2,0.3);
 }
 
 void main() {

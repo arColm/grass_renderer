@@ -16,9 +16,24 @@ layout(buffer_reference, std430) writeonly buffer VertexBuffer {
 layout( push_constant ) uniform constants
 {
 	//data.x = number of vertices per side
+	//data.y = TERRAIN_QUALITY
 	vec4 data;
 	VertexBuffer vertexBuffer;
 } PushConstants;
+
+vec4 getHeightData(vec2 p, ivec2 mapCenter, int numVerticesPerSide) {
+	vec2 samplePoint = p + mapCenter;// - numVerticesPerSide/2;
+	vec2 fractional = fract(samplePoint);
+
+	ivec2 texCoord = ivec2(floor(samplePoint));
+
+	vec4 bl = imageLoad(heightMap, texCoord);
+	vec4 tl = imageLoad(heightMap, texCoord+ivec2(0,1));
+	vec4 br = imageLoad(heightMap, texCoord+ivec2(1,0));
+	vec4 tr = imageLoad(heightMap, texCoord+ivec2(1,1));
+
+	return mix(mix(bl,tl,fractional.y),mix(br,tr,fractional.y),fractional.x);
+}
 
 //called once per vertex (x,y)
 void main() {
@@ -26,17 +41,19 @@ void main() {
 	int size = numVerticesPerSide * numVerticesPerSide;
 	ivec2 mapSize = imageSize(heightMap);
 	ivec2 mapCenter = mapSize/2;
-	
+	float terrainQuality = PushConstants.data.y;
 
 	
 	if(gl_GlobalInvocationID.x >=numVerticesPerSide||gl_GlobalInvocationID.y >= numVerticesPerSide) return;
 
 
-	float x = float(gl_GlobalInvocationID.x) - PushConstants.data.x/2;
-	float z = float(gl_GlobalInvocationID.y) - PushConstants.data.x/2;
+	float x = (float(gl_GlobalInvocationID.x) - PushConstants.data.x/2)/terrainQuality;
+	float z = (float(gl_GlobalInvocationID.y) - PushConstants.data.x/2)/terrainQuality;
 
-	vec4 mapData = imageLoad(heightMap,mapCenter+ivec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)-numVerticesPerSide);
-	float y = mapData.a;
+	//vec4 mapData = imageLoad(heightMap,mapCenter+ivec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)-numVerticesPerSide);
+	//vec4 mapData = getHeightData(vec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)/terrainQuality,mapCenter,numVerticesPerSide);
+	vec4 mapData = getHeightData(vec2(x,z),mapCenter,numVerticesPerSide);
+	float y = 20*mapData.a;
 
 	Vertex v;
 	v.position = vec3(x,y,z);

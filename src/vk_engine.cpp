@@ -57,6 +57,7 @@ void VulkanEngine::init()
 	initSyncStructures();
 	initDescriptors();
 	initPipelines();
+	initSampler();
 	
 	initDefaultData();
 	initSceneData();
@@ -362,10 +363,14 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	pushConstants.data1 = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 1);
 	pushConstants.data2 = glm::vec4(_grassCount, _maxGrassDistance, _grassDensity, 0);
 
+	VkDescriptorSet descriptorSets[] = {
+		_grassDataDescriptorSet,
+		_heightMapDescriptorSet
+	};
 	//bind the gradient drawing compute pipeline
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipeline);
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 1, &_grassDataDescriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _grassComputePipelineLayout, 0, 2, descriptorSets, 0, nullptr);
 	vkCmdPushConstants(cmd, _grassComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	//execute compute pipeline dispatch
 	vkCmdDispatch(cmd, std::ceil((float)(_grassCount) / 64.0),
@@ -473,6 +478,11 @@ void VulkanEngine::run()
 			ImGui::End();
 		}
 
+		if (ImGui::Begin("height map"))
+		{
+			ImGui::Image((ImTextureID)_heightMapSamplerDescriptorSet, ImVec2(200, 200));
+			ImGui::End();
+		}
 
 
 		ImGui::Render();
@@ -858,6 +868,11 @@ void VulkanEngine::initDescriptors()
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		_grassDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 	}
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		_heightMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
 
 	//allocate a descriptor set for draw image
 	_drawImageDescriptors = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
@@ -894,6 +909,7 @@ void VulkanEngine::initDescriptors()
 		vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
 		vkDestroyDescriptorSetLayout(_device, _sceneDataDescriptorLayout, nullptr);
 		vkDestroyDescriptorSetLayout(_device, _grassDataDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(_device, _heightMapDescriptorLayout, nullptr);
 	});
 }
 
@@ -956,6 +972,24 @@ void VulkanEngine::initBackgroundPipelines()
 		vkDestroyPipelineLayout(_device, _backgroundPipelineLayout, nullptr);
 		vkDestroyPipeline(_device, _backgroundPipeline, nullptr);
 	});
+}
+
+void VulkanEngine::initSampler()
+{
+	//Sampler
+	VkSamplerCreateInfo samplerCreateInfo{};
+	samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerCreateInfo.pNext = nullptr;
+	samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
+	samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
+
+	vkCreateSampler(_device, &samplerCreateInfo, nullptr, &_defaultSampler);
+
+	_mainDeletionQueue.pushFunction(
+		[&] {
+			vkDestroySampler(_device, _defaultSampler, nullptr);
+		}
+	);
 }
 
 void VulkanEngine::initImGui()
@@ -1192,14 +1226,18 @@ void VulkanEngine::initGrassPipeline()
 	computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
 	//sets
+	VkDescriptorSetLayout computeLayout[] = {
+		_grassDataDescriptorLayout,
+		_heightMapDescriptorLayout
+	};
 
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
 	computePipelineLayoutInfo.pushConstantRangeCount = 1;
-	computePipelineLayoutInfo.setLayoutCount = 1;
-	computePipelineLayoutInfo.pSetLayouts = &_grassDataDescriptorLayout;
+	computePipelineLayoutInfo.setLayoutCount = 2;
+	computePipelineLayoutInfo.pSetLayouts = computeLayout;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_grassComputePipelineLayout));
 
@@ -1356,7 +1394,7 @@ void VulkanEngine::initGround()
 		VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computeVertexPipeline));
 
 		ComputeVertexPushConstants pushConstants{};
-		pushConstants.data = glm::vec4(numVerticesPerSide,0,0,0);
+		pushConstants.data = glm::vec4(numVerticesPerSide,2,0,0);
 		pushConstants.vertexBuffer = meshBuffers.vertexBufferAddress;
 
 		////clean structures
@@ -1569,6 +1607,7 @@ void VulkanEngine::initHeightMap()
 
 	VkImageUsageFlags imageUsageFlags{};
 	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
 	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_heightMapImage.imageFormat, imageUsageFlags, imageExtent);
 
@@ -1585,6 +1624,34 @@ void VulkanEngine::initHeightMap()
 
 	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_heightMapImage.imageView));
 
+	{
+		//create debug image view 
+		VkImageViewCreateInfo info{};
+
+		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		info.pNext = nullptr;
+
+		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		info.image = _heightMapImage.image;
+		info.format = _heightMapImage.imageFormat;
+		info.subresourceRange.baseMipLevel = 0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.components = {
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A
+		};
+		vkCreateImageView(_device, &info, nullptr, &_heightMapDebugImageView);
+		_mainDeletionQueue.pushFunction(
+			[=]() {
+				vkDestroyImageView(_device, _heightMapDebugImageView, nullptr);
+			});
+	}
+
 	//add to deletion queues
 	_mainDeletionQueue.pushFunction(
 		[=]() {
@@ -1595,16 +1662,13 @@ void VulkanEngine::initHeightMap()
 	// DESCRIPTORS
 	//	descriptor layout
 	{
-		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		_heightMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		//	writing to descriptor set
+		_heightMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _heightMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.updateSet(_device, _heightMapDescriptorSet);
 	}
 
-	//	writing to descriptor set
-	_heightMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
-	DescriptorWriter writer;
-	writer.writeImage(0, _heightMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.updateSet(_device, _heightMapDescriptorSet);
 
 	//	PIPELINE
 	VkShaderModule computeShader;
@@ -1667,4 +1731,18 @@ void VulkanEngine::initHeightMap()
 			vkCmdDispatch(cmd, std::ceil(HEIGHT_MAP_SIZE / 16.0f), std::ceil(HEIGHT_MAP_SIZE / 16.0f), 1);
 		}
 	);
+
+	{
+		//create debug descriptor set
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		VkDescriptorSetLayout layout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		_heightMapSamplerDescriptorSet = _globalDescriptorAllocator.allocate(_device, layout, nullptr);
+		DescriptorWriter writer;
+		writer.writeImage(0, _heightMapDebugImageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_device, _heightMapSamplerDescriptorSet);
+
+		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
+	}
 }

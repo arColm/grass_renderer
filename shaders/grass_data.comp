@@ -6,6 +6,7 @@ layout(std140,set = 0, binding = 0) buffer data {
 	vec4 positions[];
 };
 
+layout(rgba16f, set = 1, binding = 0) uniform image2D heightMap;
 
 
 //push constants block
@@ -18,6 +19,20 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 #include "noise.glsl"
+
+vec4 getHeightData(vec2 p, ivec2 mapCenter, int numVerticesPerSide) {
+	vec2 samplePoint = p+ mapCenter;// - numVerticesPerSide;
+	vec2 fractional = fract(samplePoint);
+
+	ivec2 texCoord = ivec2(floor(samplePoint));
+
+	vec4 bl = imageLoad(heightMap, texCoord);
+	vec4 tl = imageLoad(heightMap, texCoord+ivec2(0,1));
+	vec4 br = imageLoad(heightMap, texCoord+ivec2(1,0));
+	vec4 tr = imageLoad(heightMap, texCoord+ivec2(1,1));
+
+	return mix(mix(bl,tl,fractional.y),mix(br,tr,fractional.y),fractional.x);
+}
 
 void main()
 {
@@ -35,13 +50,18 @@ void main()
 
 	float distanceFromCenterSq = ((x-grassDistance)*(x-grassDistance)+(z-grassDistance)*(z-grassDistance))/(grassDistance*grassDistance);
 
-	vec4 offset = vec4(-grassDistance, -2,-grassDistance, 0);
+	vec4 offset = vec4(-grassDistance, 0,-grassDistance, 0);
 
 	vec4 position = vec4(x,0,z,0)+offset +vec4(floor(playerPosition.x),0,floor(playerPosition.z),0);
 
 	float distanceToPlayer = distance(position.xyz,vec3(playerPosition.x,0,playerPosition.z));
 	position += vec4(0,mix(0,-1,distanceToPlayer/grassDistance) + 0.5*layeredNoise(position.xz,1,1),0,0);
     position += vec4(layeredNoise(position.xz,4,1),0,layeredNoise(position.xz,2,1.5),0);
+	
+
+	vec4 heightData = getHeightData(position.xz,imageSize(heightMap)/2,202);
+	
+	position.y += 20*heightData.a;
 
 	positions[int(gl_GlobalInvocationID.x)] = position;
 
