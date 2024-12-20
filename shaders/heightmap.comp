@@ -10,7 +10,7 @@ layout(rgba16f,set = 0, binding = 0) uniform image2D data;
 
 
 float getHeight(vec2 coord) {
-	return layeredNoise(coord,3,0.1,2,0.3);
+	return 20*layeredNoise(coord,3,0.1,2,0.3);
 }
 
 void main() {
@@ -39,6 +39,7 @@ void main() {
 		vec3 vertical = vec3(0,B-T,2);
 
 		vec3 normal = normalize(cross(vertical,horizontal));
+		normal = normalize(vec3(L-R,2,B-T));
 
 
 		imageStore(data, texelCoord, vec4(normal,height));

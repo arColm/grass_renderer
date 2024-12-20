@@ -20,8 +20,8 @@ layout( push_constant ) uniform constants
 
 #include "noise.glsl"
 
-vec4 getHeightData(vec2 p, ivec2 mapCenter, int numVerticesPerSide) {
-	vec2 samplePoint = p+ mapCenter;// - numVerticesPerSide;
+vec4 getHeightData(vec2 p, ivec2 mapCenter) {
+	vec2 samplePoint = p+ mapCenter;
 	vec2 fractional = fract(samplePoint);
 
 	ivec2 texCoord = ivec2(floor(samplePoint));
@@ -59,9 +59,11 @@ void main()
     position += vec4(layeredNoise(position.xz,4,1),0,layeredNoise(position.xz,2,1.5),0);
 	
 
-	vec4 heightData = getHeightData(position.xz,imageSize(heightMap)/2,202);
+	vec4 heightData = getHeightData(position.xz,imageSize(heightMap)/2);
 	
-	position.y += 20*heightData.a;
+	position.y += heightData.a;
+
+	if(heightData.y <=0.7) position = vec4(0,-20,0,0);
 
 	positions[int(gl_GlobalInvocationID.x)] = position;
 
