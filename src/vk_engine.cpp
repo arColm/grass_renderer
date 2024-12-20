@@ -27,6 +27,7 @@
 #include "vk_buffers.hpp"
 
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
+const int VulkanEngine::RENDER_DISTANCE = 100;
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -1255,6 +1256,7 @@ void VulkanEngine::initSceneData()
 
 void VulkanEngine::initGround()
 {
+	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
 
 	std::array<Vertex, 4> vertices{};
@@ -1270,102 +1272,206 @@ void VulkanEngine::initGround()
 		0,2,3
 	};
 
+	//
+	uint32_t numVerticesPerSide = (RENDER_DISTANCE * 2 + 2);
+	const size_t vertexBufferSize = numVerticesPerSide * numVerticesPerSide;
+	const size_t indexBufferSize = (numVerticesPerSide - 1) * (numVerticesPerSide - 1) * 6;
+	meshBuffers.vertexBuffer = createBuffer(vertexBufferSize * sizeof(Vertex),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+	meshBuffers.indexBuffer = createBuffer(indexBufferSize * sizeof(uint32_t),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
 	std::vector<GeoSurface> surfaces;
 	surfaces.resize(1);
 	surfaces[0].count = static_cast<uint32_t>(indices.size());
 	surfaces[0].startIndex = static_cast<uint32_t>(0);
-	//
-
-	const size_t vertexBufferSize = (_renderDistance*2) * (_renderDistance*2);
-	const size_t indexBufferSize = (_renderDistance * 2 - 1) * (_renderDistance * 2 - 1) * 6;
-	AllocatedBuffer vertexBuffer = createBuffer(vertexBufferSize * sizeof(Vertex),
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
-	AllocatedBuffer indexBuffer = createBuffer(indexBufferSize * sizeof(uint32_t),
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
-
-
-	//	PIPELINE
-	VkShaderModule vertexComputeShader;
-	if (!vkutil::loadShaderModule("./shaders/ground_mesh_vertices.comp.spv", _device, &vertexComputeShader))
-	{
-		fmt::print("error when building ground mesh vertex compute shader module\n");
-	}
-	else
-	{
-		fmt::print("ground mesh compute shader loaded\n");
-	}
-
-	//push constant range
-	//VkPushConstantRange computeBufferRange{};
-	//computeBufferRange.offset = 0;
-	//computeBufferRange.size = sizeof(ComputePushConstants);
-	//computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	//sets
-
-	//build pipeline layout that controls the input/outputs of shader
-	//	note: no descriptor sets or other yet.
-	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
-	//computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
-	//computePipelineLayoutInfo.pushConstantRangeCount = 1;
-	//computePipelineLayoutInfo.setLayoutCount = 1;
-	//computePipelineLayoutInfo.pSetLayouts = &_heightMapDescriptorLayout;
-
-	//VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_heightMapComputePipelineLayout));
-
-	//VkPipelineShaderStageCreateInfo stageInfo{};
-	//stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	//stageInfo.pNext = nullptr;
-	//stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	//stageInfo.pName = "main"; //name of entrypoint function
-	//stageInfo.module = computeShader;
-
-	////create pipelines
-	//VkComputePipelineCreateInfo computePipelineCreateInfo{};
-	//computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	//computePipelineCreateInfo.pNext = nullptr;
-	//computePipelineCreateInfo.layout = _heightMapComputePipelineLayout;
-	//computePipelineCreateInfo.stage = stageInfo;
-
-	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_heightMapComputePipeline));
-
-	////clean structures
-	//vkDestroyShaderModule(_device, computeShader, nullptr);
-
-	//_mainDeletionQueue.pushFunction([&]() {
-	//	vkDestroyPipelineLayout(_device, _heightMapComputePipelineLayout, nullptr);
-	//	vkDestroyPipeline(_device, _heightMapComputePipeline, nullptr);
-	//	});
-
-	//immediateSubmit(
-	//	[&](VkCommandBuffer cmd) {
-	//	}
-	//);
-
-
-
-
-
+	surfaces[0].count = static_cast<uint32_t>(indexBufferSize);
 
 	VkBufferDeviceAddressInfo vertexBufferAddressInfo{};
 	vertexBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 	vertexBufferAddressInfo.pNext = nullptr;
-	vertexBufferAddressInfo.buffer = vertexBuffer.buffer;
+	vertexBufferAddressInfo.buffer = meshBuffers.vertexBuffer.buffer;
+	meshBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &vertexBufferAddressInfo);
 
-	GPUMeshBuffers meshBuffers{};
-	//meshBuffers.indexBuffer = ;
-	//meshBuffers.vertexBuffer = ;
-	//meshBuffers.vertexBufferAddress = ;
+	VkBufferDeviceAddressInfo indexBufferAddressInfo{};
+	indexBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	indexBufferAddressInfo.pNext = nullptr;
+	indexBufferAddressInfo.buffer = meshBuffers.indexBuffer.buffer;
+	VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(_device, &indexBufferAddressInfo);
+	
+	//VERTEX
+	{
+		//	PIPELINE
+		VkShaderModule computeVertexShader;
+		if (!vkutil::loadShaderModule("./shaders/ground_mesh_vertices.comp.spv", _device, &computeVertexShader))
+		{
+			fmt::print("error when building ground mesh vertex compute shader module\n");
+		}
+		else
+		{
+			fmt::print("ground mesh vertex compute shader loaded\n");
+		}
+
+		struct ComputeVertexPushConstants {
+			glm::vec4 data;
+			VkDeviceAddress vertexBuffer;
+		};
+
+		//push constant range
+		VkPushConstantRange computeVertexBufferRange{};
+		computeVertexBufferRange.offset = 0;
+		computeVertexBufferRange.size = sizeof(ComputeVertexPushConstants);
+		computeVertexBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+		//sets
+
+		//build pipeline layout that controls the input/outputs of shader
+		//	note: no descriptor sets or other yet.
+		VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+		computePipelineLayoutInfo.pPushConstantRanges = &computeVertexBufferRange;
+		computePipelineLayoutInfo.pushConstantRangeCount = 1;
+		computePipelineLayoutInfo.pSetLayouts = &_heightMapDescriptorLayout;
+		computePipelineLayoutInfo.setLayoutCount = 1;
+		
+		VkPipelineLayout computeVertexPipelineLayout;
+		VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &computeVertexPipelineLayout));
+
+		VkPipelineShaderStageCreateInfo stageInfo{};
+		stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		stageInfo.pNext = nullptr;
+		stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		stageInfo.pName = "main"; //name of entrypoint function
+		stageInfo.module = computeVertexShader;
+
+		////create pipelines
+		VkComputePipelineCreateInfo computePipelineCreateInfo{};
+		computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		computePipelineCreateInfo.pNext = nullptr;
+		computePipelineCreateInfo.layout = computeVertexPipelineLayout;
+		computePipelineCreateInfo.stage = stageInfo;
+
+		VkPipeline computeVertexPipeline;
+		VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computeVertexPipeline));
+
+		ComputeVertexPushConstants pushConstants{};
+		pushConstants.data = glm::vec4(numVerticesPerSide,0,0,0);
+		pushConstants.vertexBuffer = meshBuffers.vertexBufferAddress;
+
+		////clean structures
+		vkDestroyShaderModule(_device, computeVertexShader, nullptr);
+
+		//_mainDeletionQueue.pushFunction([&]() {
+		//	});
+
+		immediateSubmit(
+			[&](VkCommandBuffer cmd) {
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computeVertexPipeline);
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computeVertexPipelineLayout, 0, 1, &_heightMapDescriptorSet,
+					0, nullptr);
+				vkCmdPushConstants(cmd, computeVertexPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+					sizeof(ComputeVertexPushConstants), &pushConstants);
+				vkCmdDispatch(cmd, std::ceil(numVerticesPerSide / 16.0f), std::ceil(numVerticesPerSide / 16.0f), 1);
+			}
+		);
+		vkDestroyPipelineLayout(_device, computeVertexPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, computeVertexPipeline, nullptr);
+	}
 
 
+	//INDICES
+	{
+		//	PIPELINE
+		VkShaderModule computeIndexShader;
+		if (!vkutil::loadShaderModule("./shaders/ground_mesh_indices.comp.spv", _device, &computeIndexShader))
+		{
+			fmt::print("error when building ground mesh indices compute shader module\n");
+		}
+		else
+		{
+			fmt::print("ground mesh index compute shader loaded\n");
+		}
+
+		struct ComputeIndexPushConstants {
+			glm::vec4 data;
+			VkDeviceAddress indexBuffer;
+		};
+
+		//push constant range
+		VkPushConstantRange computeIndexBufferRange{};
+		computeIndexBufferRange.offset = 0;
+		computeIndexBufferRange.size = sizeof(ComputeIndexPushConstants);
+		computeIndexBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+		//sets
+
+		//build pipeline layout that controls the input/outputs of shader
+		//	note: no descriptor sets or other yet.
+		VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+		computePipelineLayoutInfo.pPushConstantRanges = &computeIndexBufferRange;
+		computePipelineLayoutInfo.pushConstantRangeCount = 1;
+		//computePipelineLayoutInfo.pSetLayouts = &_heightMapDescriptorLayout;
+		computePipelineLayoutInfo.setLayoutCount = 0;
+
+		VkPipelineLayout computeIndexPipelineLayout;
+		VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &computeIndexPipelineLayout));
+
+		VkPipelineShaderStageCreateInfo stageInfo{};
+		stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		stageInfo.pNext = nullptr;
+		stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		stageInfo.pName = "main"; //name of entrypoint function
+		stageInfo.module = computeIndexShader;
+
+		////create pipelines
+		VkComputePipelineCreateInfo computePipelineCreateInfo{};
+		computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		computePipelineCreateInfo.pNext = nullptr;
+		computePipelineCreateInfo.layout = computeIndexPipelineLayout;
+		computePipelineCreateInfo.stage = stageInfo;
+
+		VkPipeline computeIndexPipeline;
+		VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computeIndexPipeline));
+
+		ComputeIndexPushConstants pushConstants{};
+		pushConstants.data = glm::vec4(numVerticesPerSide-1, 0, 0, 0);
+		pushConstants.indexBuffer = indexBufferAddress;
+
+		////clean structures
+		vkDestroyShaderModule(_device, computeIndexShader, nullptr);
+
+		//_mainDeletionQueue.pushFunction([&]() {
+		//	});
+
+		immediateSubmit(
+			[&](VkCommandBuffer cmd) {
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computeIndexPipeline);
+				vkCmdPushConstants(cmd, computeIndexPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+					sizeof(ComputeIndexPushConstants), &pushConstants);
+				vkCmdDispatch(cmd, std::ceil((float)indexBufferSize/(6*64)), 1, 1);
+			}
+		);
+		vkDestroyPipelineLayout(_device, computeIndexPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, computeIndexPipeline, nullptr);
+	}
+
+
+
+
+
+
+	//meshBuffers.indexBuffer = indexBuffer;
+	//meshBuffers.vertexBuffer = vertexBuffer;
+	//meshBuffers.vertexBufferAddress = vertexBufferAddress;
+
+	//TODO OPTIMIZATION make the vertices and indices in same buffer with offset to improve performance
 	meshAsset.name = "ground";
 	meshAsset.surfaces = surfaces;
-	meshAsset.meshBuffers = uploadMesh(indices,vertices);
+	//meshAsset.meshBuffers = uploadMesh(indices,vertices);
+	meshAsset.meshBuffers = meshBuffers;
 
 
-	//_meshAssets["ground"] = std::make_shared<MeshAsset>(std::move(meshAsset));
 	_groundMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
 
 
@@ -1377,12 +1483,12 @@ void VulkanEngine::initGround()
 
 		}
 	);
-	_mainDeletionQueue.pushFunction(
-		[=]() {
-			destroyBuffer(vertexBuffer);
-			destroyBuffer(indexBuffer);
-		}
-	);
+	//_mainDeletionQueue.pushFunction(
+	//	[&]() {
+	//		destroyBuffer(meshBuffers.vertexBuffer);
+	//		destroyBuffer(meshBuffers.indexBuffer);
+	//	}
+	//);
 }
 
 void VulkanEngine::initGrass()

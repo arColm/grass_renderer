@@ -15,20 +15,36 @@ layout(buffer_reference, std430) writeonly buffer VertexBuffer {
 
 layout( push_constant ) uniform constants
 {
+	//data.x = number of vertices per side
+	vec4 data;
 	VertexBuffer vertexBuffer;
 } PushConstants;
 
+//called once per vertex (x,y)
 void main() {
-	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-	int size = PushConstants.vertexBuffer.length;
+	int numVerticesPerSide = int(PushConstants.data.x);
+	int size = numVerticesPerSide * numVerticesPerSide;
+	ivec2 mapSize = imageSize(heightMap);
+	ivec2 mapCenter = mapSize/2;
+	
 
 	
-	if(texelCoord.x < size.x && texelCoord.y < size.y)
-	{
-		vec3 normal = vec3(0);
+	if(gl_GlobalInvocationID.x >=numVerticesPerSide||gl_GlobalInvocationID.y >= numVerticesPerSide) return;
 
-		float height = sin(float(texelCoord.x)/10) + cos(float(texelCoord.y)/10);
 
-		imageStore(data, texelCoord, vec4(normal,height));
-	}
+	float x = float(gl_GlobalInvocationID.x) - PushConstants.data.x/2;
+	float z = float(gl_GlobalInvocationID.y) - PushConstants.data.x/2;
+
+	vec4 mapData = imageLoad(heightMap,mapCenter+ivec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)-numVerticesPerSide);
+	float y = mapData.a;
+
+	Vertex v;
+	v.position = vec3(x,y,z);
+	v.uv_x = 0;
+	v.uv_y = 0;
+	v.normal = mapData.xyz;
+	v.color = vec4(0.07,0.15*(1+y/10),0.09,1.0);
+	
+	uint vertexIndex = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * numVerticesPerSide;
+	PushConstants.vertexBuffer.vertices[vertexIndex] = v;
 }

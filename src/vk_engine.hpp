@@ -162,7 +162,7 @@ public:
 
 	//terrain TODO
 	//	heightMap.xyz = normal, heightMap.a = height
-	int _renderDistance = 1;
+	static const int RENDER_DISTANCE;
 	static const int HEIGHT_MAP_SIZE;
 	AllocatedImage _heightMapImage;
 	VkPipelineLayout _heightMapComputePipelineLayout;
