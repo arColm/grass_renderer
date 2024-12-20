@@ -217,5 +217,8 @@
     <None Include="shaders\ground_mesh_vertices.comp">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\noise.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
