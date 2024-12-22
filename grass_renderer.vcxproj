@@ -185,9 +185,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\0_scene_data.glsl" />
-    <None Include="shaders\colored_triangle.frag" />
-    <None Include="shaders\colored_triangle.vert" />
-    <None Include="shaders\colored_triangle_mesh.vert" />
     <None Include="shaders\gradient.comp" />
     <None Include="shaders\gradient_color.comp" />
     <None Include="shaders\grass.vert" />

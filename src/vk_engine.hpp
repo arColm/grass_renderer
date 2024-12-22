@@ -142,6 +142,7 @@ public:
 	//scene
 	Player _player;
 	SceneData _sceneData;
+	glm::vec3 _sunPosition;
 
 	EngineStats _engineStats;
 	std::shared_ptr<MeshAsset> _groundMesh;
@@ -161,8 +162,7 @@ public:
 	AllocatedBuffer _grassDataBuffer;
 	std::shared_ptr<MeshAsset> _grassMesh;
 
-	//terrain TODO
-	//	heightMap.xyz = normal, heightMap.a = height
+	//terrain
 	static const int RENDER_DISTANCE;
 	static const int HEIGHT_MAP_SIZE;
 	AllocatedImage _heightMapImage;
@@ -173,11 +173,21 @@ public:
 	VkImageView _heightMapDebugImageView;
 	VkDescriptorSet _heightMapSamplerDescriptorSet;
 
+	//shadowmap TODO
+	static const int SHADOWMAP_RESOLUTION;
+	VkDescriptorSetLayout _shadowMapDescriptorLayout;
+	VkDescriptorSet _shadowMapDescriptorSet;
+	AllocatedImage _shadowMapImage;
+	SceneData _shadowMapSceneData;
+	VkPipelineLayout _shadowMeshPipelineLayout;
+	VkPipeline _shadowMeshPipeline; 
+	VkPipelineLayout _shadowGrassPipelineLayout;
+	VkPipeline _shadowGrassPipeline; 
+
+
 	//wind TODO
 	AllocatedImage _windMapImage;
 
-	//shadowmap TODO
-	AllocatedImage _shadowMapImage;
 
 
 	//initializes everything in engine
@@ -191,6 +201,7 @@ public:
 	void drawBackground(VkCommandBuffer cmd);
 	void drawImGui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawGeometry(VkCommandBuffer cmd);
+	void drawShadowMap(VkCommandBuffer cmd);
 
 	void calculateGrassData(VkCommandBuffer cmd);
 
@@ -237,5 +248,6 @@ private:
 	void initGround();
 	void initGrass();
 	void initHeightMap();
+	void initShadowMapResources();
 
 };

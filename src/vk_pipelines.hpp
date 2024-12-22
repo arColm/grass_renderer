@@ -25,6 +25,7 @@ namespace vkutil
 		VkPipeline buildPipeline(VkDevice device);
 
 		void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+		void setVertexShader(VkShaderModule vertexShader);
 		void setInputTopology(VkPrimitiveTopology topology);
 		void setPolygonMode(VkPolygonMode mode);
 		void setCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);

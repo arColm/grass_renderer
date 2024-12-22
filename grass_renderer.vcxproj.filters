@@ -169,15 +169,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\colored_triangle.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\colored_triangle.vert">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\colored_triangle_mesh.vert">
-      <Filter>Shader Files</Filter>
-    </None>
     <None Include="shaders\gradient.comp">
       <Filter>Shader Files</Filter>
     </None>

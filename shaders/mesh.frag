@@ -5,6 +5,10 @@
 
 #include "0_scene_data.glsl"
 
+layout (std140,set = 1, binding = 0) readonly buffer GrassData {
+	vec4 positions[];
+} grassData;
+
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;

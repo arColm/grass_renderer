@@ -27,6 +27,7 @@
 #include "vk_buffers.hpp"
 
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
+const int VulkanEngine::SHADOWMAP_RESOLUTION = 2048;
 const int VulkanEngine::RENDER_DISTANCE = 100;
 
 VulkanEngine* loadedEngine = nullptr;
@@ -55,12 +56,14 @@ void VulkanEngine::init()
 	initSwapchain();
 	initCommands();
 	initSyncStructures();
-	initDescriptors();
-	initPipelines();
 	initSampler();
+	initDescriptors();
+	initShadowMapResources();
+	initPipelines();
 	
 	initDefaultData();
 	initSceneData();
+
 
 	initImGui();
 
@@ -141,6 +144,14 @@ void VulkanEngine::draw()
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //reset after executing once
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+	calculateGrassData(cmd);
+
+	//calculate shadow map
+	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	drawShadowMap(cmd);
+	
+		
+
 	//make the draw image into writable mode before rendering
 	//note: for read-only iamge or rasterized image, GENERAL is not optimal
 	//		but for compute-shader written images, GENERAL is the best
@@ -153,7 +164,6 @@ void VulkanEngine::draw()
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	
 	//calculate grass positions
-	calculateGrassData(cmd);
 	drawGeometry(cmd);
 
 	//prepare to copy drawimage to swapchain image
@@ -267,6 +277,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	writer.updateSet(_device, sceneDataDescriptorSet);
 	
 	//begin a render pass connected to draw image
+	//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -323,7 +334,120 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
 
-	getCurrentFrame().drawQueue.flush(sceneDataDescriptorSet,pushConstants);
+
+	//draw grass
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
+
+	pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
+
+	VkDescriptorSet sets[] = {
+		sceneDataDescriptorSet,
+		_grassDataDescriptorSet
+	};
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 2, sets, 0, nullptr);
+	vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
+
+
+	vkCmdEndRendering(cmd);
+}
+
+void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
+{
+	//IDK if theres a better way to do this (there probably is) but for now
+	// everything is just copypasted from drawGeometry
+	//PER FRAME DATA
+	//	Scene Data
+	AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	getCurrentFrame().deletionQueue.pushFunction(
+		[=, this]() {
+			destroyBuffer(sceneDataBuffer);
+		}
+	);
+	SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
+	*sceneUniformData = _shadowMapSceneData; //write scene data to buffer
+
+	VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
+	DescriptorWriter writer;
+	writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.updateSet(_device, sceneDataDescriptorSet);
+
+	//begin a render pass connected to draw image
+	//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_shadowMapImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	VkRenderingInfo renderingInfo{};
+	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderingInfo.pNext = nullptr;
+
+	renderingInfo.renderArea = VkRect2D{ VkOffset2D{0,0}, VkExtent2D(_shadowMapImage.imageExtent.width,_shadowMapImage.imageExtent.height)};
+	renderingInfo.layerCount = 1;
+	renderingInfo.colorAttachmentCount = 0;
+	renderingInfo.pDepthAttachment = &depthAttachment;
+	renderingInfo.pStencilAttachment = nullptr;
+	vkCmdBeginRendering(cmd, &renderingInfo);
+
+	//set dynamic viewport and scissor
+	VkViewport viewport{};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = _shadowMapImage.imageExtent.width;
+	viewport.height = _shadowMapImage.imageExtent.height;
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.extent.width = _shadowMapImage.imageExtent.width;
+	scissor.extent.height = _shadowMapImage.imageExtent.height;
+	scissor.offset.x = 0;
+	scissor.offset.y = 0;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	//draw mesh
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipeline);
+
+	GPUDrawPushConstants pushConstants{};
+	_sunPosition = glm::vec3(30 * _sceneData.sunlightDirection.x, 30 * _sceneData.sunlightDirection.y, 30 * _sceneData.sunlightDirection.z);
+	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
+	pushConstants.playerPosition = glm::vec4(_sunPosition.x, _sunPosition.y, _sunPosition.z, 0);
+
+	//draw loaded test mesh
+	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+
+
+	//draw ground
+	pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
+	vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
+
+	//draw grass
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipeline);
+
+	pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
+
+	VkDescriptorSet sets[] = {
+		sceneDataDescriptorSet,
+		_grassDataDescriptorSet
+	};
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 2, sets, 0, nullptr);
+	vkCmdPushConstants(cmd, _shadowGrassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
 
 
 	vkCmdEndRendering(cmd);
@@ -379,33 +503,6 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
 		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
 		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT_KHR);
-	
-
-
-
-
-
-	getCurrentFrame().drawQueue.pushFunction(
-		[=, this](VkDescriptorSet sceneDataDescriptorSet, GPUDrawPushConstants drawPushConstants) {
-			//grass rendering
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
-
-			drawPushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
-			//drawPushConstants.worldMatrix = glm::translate(glm::vec3(1, -2, 0));
-
-			VkDescriptorSet sets[] = {
-				sceneDataDescriptorSet,
-				_grassDataDescriptorSet
-			};
-
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 2, sets, 0, nullptr);
-			vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &drawPushConstants);
-			vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-			//draw _grassCount instances
-			vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
-		}
-	);
 }
 
 void VulkanEngine::run()
@@ -609,6 +706,13 @@ void VulkanEngine::updateScene(float deltaTime)
 	_player.update(deltaTime);
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
+
+	_sunPosition = glm::vec3(30 * _sceneData.sunlightDirection.x, 30 * _sceneData.sunlightDirection.y, 30 * _sceneData.sunlightDirection.z);
+	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
+		glm::vec3(0), glm::vec3(0, 1, 0));;
+	//_shadowMapSceneData.view = _sceneData.view;
+	//_shadowMapSceneData.proj = _sceneData.proj;
+	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
 }
 
 void VulkanEngine::initVulkan()
@@ -1744,5 +1848,209 @@ void VulkanEngine::initHeightMap()
 		writer.updateSet(_device, _heightMapSamplerDescriptorSet);
 
 		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
+	}
+}
+
+void VulkanEngine::initShadowMapResources()
+{
+	glm::mat4 projection =
+		glm::ortho(-(_shadowMapImage.imageExtent.width * 0.5), _shadowMapImage.imageExtent.width * 0.5,
+			-(_shadowMapImage.imageExtent.height * 0.5), _shadowMapImage.imageExtent.height * 0.5,
+			1.0, 100.0);
+	projection =
+		glm::ortho(-(40.0), 40.0,
+			-(40.0), 40.0,
+			0.0, 100.0);
+	_shadowMapSceneData.proj = projection;
+	//IMAGE
+	VkExtent3D imageExtent = {
+		SHADOWMAP_RESOLUTION,
+		SHADOWMAP_RESOLUTION,
+		1
+	};
+
+	//hardcoding depth to be same as regular depth test image
+	_shadowMapImage.imageFormat = _depthImage.imageFormat;
+	_shadowMapImage.imageExtent = imageExtent;
+
+	VkImageUsageFlags imageUsageFlags{};
+	imageUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_shadowMapImage.imageFormat, imageUsageFlags, imageExtent);
+
+	//allocate draw image from gpu memory
+	VmaAllocationCreateInfo imgAllocInfo{};
+	imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+	//allocate and create image
+	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_shadowMapImage.image, &_shadowMapImage.allocation, nullptr);
+
+	//build image view for the draw image to use for rendering
+	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_shadowMapImage.imageFormat, _shadowMapImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_shadowMapImage.imageView));
+
+	//add to deletion queues
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _shadowMapImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _shadowMapImage.image, _shadowMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+		});
+
+
+	//DESCRIPTOR SET LAYOUTS
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		_shadowMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
+	//	deletion
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyDescriptorSetLayout(_device, _shadowMapDescriptorLayout, nullptr);
+		});
+	//DESCRIPTOR SETS
+	{
+		//	writing to descriptor set
+		_shadowMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _shadowMapDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _shadowMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_device, _shadowMapDescriptorSet);
+	}
+	
+
+	//PIPELINES
+	{
+
+		VkShaderModule meshVertShader;
+		if (!vkutil::loadShaderModule("./shaders/grass.vert.spv", _device, &meshVertShader))
+		{
+			fmt::print("error when building grass vertex shader module");
+		}
+		else
+		{
+			fmt::print("grass vertex shader loaded");
+		}
+
+		//push constant range
+		VkPushConstantRange bufferRange{};
+		bufferRange.offset = 0;
+		bufferRange.size = sizeof(GPUDrawPushConstants);
+		bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+		//sets TODO might have to make a new layout because no shadow map descriptor
+		VkDescriptorSetLayout layouts[] = {
+			_sceneDataDescriptorLayout,
+			_grassDataDescriptorLayout
+		};
+		//build pipeline layout that controls the input/outputs of shader
+		//	note: no descriptor sets or other yet.
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+		pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+		pipelineLayoutInfo.pushConstantRangeCount = 1;
+		pipelineLayoutInfo.setLayoutCount = 2;
+		pipelineLayoutInfo.pSetLayouts = layouts;
+
+		VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowGrassPipelineLayout));
+
+		//CREATE PIPELINE
+		vkutil::PipelineBuilder pipelineBuilder;
+
+		//	pipeline layout
+		pipelineBuilder._pipelineLayout = _shadowGrassPipelineLayout;
+		//	connect vertex and fragment shaders to pipeline
+		pipelineBuilder.setVertexShader(meshVertShader);
+		//	input topology
+		pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		//	polygon mode
+		pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+		//	cull mode
+		pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+		//	disable multisampling
+		pipelineBuilder.setMultisamplingNone();
+		//	disable blending
+		pipelineBuilder.enableBlendingAlphaBlend();
+		// depth testing
+		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+		//connect image format we will draw to, from draw image
+		pipelineBuilder.setDepthFormat(_shadowMapImage.imageFormat);
+
+		//build pipeline
+		_shadowGrassPipeline = pipelineBuilder.buildPipeline(_device);
+
+		//clean structures
+		vkDestroyShaderModule(_device, meshVertShader, nullptr);
+
+		_mainDeletionQueue.pushFunction([&]() {
+			vkDestroyPipelineLayout(_device, _shadowGrassPipelineLayout, nullptr);
+			vkDestroyPipeline(_device, _shadowGrassPipeline, nullptr);
+			});
+	}
+
+	{
+
+		VkShaderModule meshVertShader;
+		if (!vkutil::loadShaderModule("./shaders/mesh.vert.spv", _device, &meshVertShader))
+		{
+			fmt::print("error when building mesh vertex shader module");
+		}
+		else
+		{
+			fmt::print("mesh vertex shader loaded");
+		}
+
+		//push constant range
+		VkPushConstantRange bufferRange{};
+		bufferRange.offset = 0;
+		bufferRange.size = sizeof(GPUDrawPushConstants);
+		bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+		//sets
+
+		//build pipeline layout that controls the input/outputs of shader
+		//	note: no descriptor sets or other yet.
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+		pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+		pipelineLayoutInfo.pushConstantRangeCount = 1;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+
+		VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowMeshPipelineLayout));
+
+		//CREATE PIPELINE
+		vkutil::PipelineBuilder pipelineBuilder;
+
+		//	pipeline layout
+		pipelineBuilder._pipelineLayout = _shadowMeshPipelineLayout;
+		//	connect vertex and fragment shaders to pipeline
+		pipelineBuilder.setVertexShader(meshVertShader);
+		//	input topology
+		pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		//	polygon mode
+		pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+		//	cull mode
+		pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+		//	disable multisampling
+		pipelineBuilder.setMultisamplingNone();
+		//	disable blending
+		pipelineBuilder.enableBlendingAlphaBlend();
+		// depth testing
+		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+		//connect image format we will draw to, from draw image
+		pipelineBuilder.setDepthFormat(_shadowMapImage.imageFormat);
+
+		//build pipeline
+		_shadowMeshPipeline = pipelineBuilder.buildPipeline(_device);
+
+		//clean structures
+		vkDestroyShaderModule(_device, meshVertShader, nullptr);
+
+		_mainDeletionQueue.pushFunction([&]() {
+			vkDestroyPipelineLayout(_device, _shadowMeshPipelineLayout, nullptr);
+			vkDestroyPipeline(_device, _shadowMeshPipeline, nullptr);
+			});
 	}
 }
