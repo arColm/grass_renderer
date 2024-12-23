@@ -24,7 +24,8 @@ void vkutil::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout c
 	//subresourceRange lets us target a part of the image with the barrier
 	//useful for array images or mipmapped images, where we only need a barrier on a given layer or mipmap level
 	//we also target a specific ASPECTMASK
-	VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+	VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL || newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL) ?
+		VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 	imageBarrier.subresourceRange = vkinit::imageSubresourceRange(aspectMask);
 	imageBarrier.image = image;
 

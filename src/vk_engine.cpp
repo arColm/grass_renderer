@@ -175,6 +175,7 @@ void VulkanEngine::draw()
 	//prepare swapchain image to draw GUI
 	//	note: we use COLOR_ATTACHMENT_OPTIMAL when calling rendering commands
 	vkutil::transitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
 
 	drawImGui(cmd, _swapchainImageViews[swapchainImageIndex]);
 
@@ -307,14 +308,6 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	GPUDrawPushConstants pushConstants{};
-	glm::mat4 view = _player.getViewMatrix();
-	glm::mat4 projection = glm::perspective(
-		glm::radians(70.f),
-		(float)_drawExtent.width / (float)_drawExtent.height,
-		//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
-		0.1f,10000.f);
-	projection[1][1] *= -1; //invert y -axis
-	//pushConstants.worldMatrix = projection * view;
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
 
@@ -577,7 +570,7 @@ void VulkanEngine::run()
 
 		if (ImGui::Begin("height map"))
 		{
-			ImGui::Image((ImTextureID)_heightMapSamplerDescriptorSet, ImVec2(200, 200));
+			ImGui::Image((ImTextureID)_heightMapSamplerDescriptorSet, ImVec2(800, 800));
 			ImGui::End();
 		}
 
@@ -707,9 +700,9 @@ void VulkanEngine::updateScene(float deltaTime)
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
 
-	_sunPosition = glm::vec3(30 * _sceneData.sunlightDirection.x, 30 * _sceneData.sunlightDirection.y, 30 * _sceneData.sunlightDirection.z);
+	_sunPosition = glm::vec3(-7 * _sceneData.sunlightDirection.x,-12 * _sceneData.sunlightDirection.y, -7 * _sceneData.sunlightDirection.z);
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
-		glm::vec3(0), glm::vec3(0, 1, 0));;
+		glm::vec3(0), glm::vec3(0, 1, 0));
 	//_shadowMapSceneData.view = _sceneData.view;
 	//_shadowMapSceneData.proj = _sceneData.proj;
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
@@ -1086,6 +1079,7 @@ void VulkanEngine::initSampler()
 	samplerCreateInfo.pNext = nullptr;
 	samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
 	samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
+	samplerCreateInfo.compareEnable = VK_FALSE;
 
 	vkCreateSampler(_device, &samplerCreateInfo, nullptr, &_defaultSampler);
 
@@ -1387,7 +1381,7 @@ void VulkanEngine::initSceneData()
 			glm::radians(70.f),
 			(float)_windowExtent.width / (float)_windowExtent.height,
 			//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
-			0.1f, 10000.f);
+			0.1f, 300.f);
 	_sceneData.proj[1][1] *= -1;
 
 	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);
@@ -1728,34 +1722,6 @@ void VulkanEngine::initHeightMap()
 
 	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_heightMapImage.imageView));
 
-	{
-		//create debug image view 
-		VkImageViewCreateInfo info{};
-
-		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		info.pNext = nullptr;
-
-		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		info.image = _heightMapImage.image;
-		info.format = _heightMapImage.imageFormat;
-		info.subresourceRange.baseMipLevel = 0;
-		info.subresourceRange.levelCount = 1;
-		info.subresourceRange.baseArrayLayer = 0;
-		info.subresourceRange.layerCount = 1;
-		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		info.components = {
-			VK_COMPONENT_SWIZZLE_A,
-			VK_COMPONENT_SWIZZLE_A,
-			VK_COMPONENT_SWIZZLE_A,
-			VK_COMPONENT_SWIZZLE_A
-		};
-		vkCreateImageView(_device, &info, nullptr, &_heightMapDebugImageView);
-		_mainDeletionQueue.pushFunction(
-			[=]() {
-				vkDestroyImageView(_device, _heightMapDebugImageView, nullptr);
-			});
-	}
-
 	//add to deletion queues
 	_mainDeletionQueue.pushFunction(
 		[=]() {
@@ -1836,7 +1802,33 @@ void VulkanEngine::initHeightMap()
 		}
 	);
 
+	if(false) 
 	{
+		//create debug image view 
+		VkImageViewCreateInfo info{};
+
+		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		info.pNext = nullptr;
+
+		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		info.image = _heightMapImage.image;
+		info.format = _heightMapImage.imageFormat;
+		info.subresourceRange.baseMipLevel = 0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.components = {
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A
+		};
+		vkCreateImageView(_device, &info, nullptr, &_heightMapDebugImageView);
+		_mainDeletionQueue.pushFunction(
+			[=]() {
+				vkDestroyImageView(_device, _heightMapDebugImageView, nullptr);
+			});
 		//create debug descriptor set
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -1854,13 +1846,10 @@ void VulkanEngine::initHeightMap()
 void VulkanEngine::initShadowMapResources()
 {
 	glm::mat4 projection =
-		glm::ortho(-(_shadowMapImage.imageExtent.width * 0.5), _shadowMapImage.imageExtent.width * 0.5,
-			-(_shadowMapImage.imageExtent.height * 0.5), _shadowMapImage.imageExtent.height * 0.5,
-			1.0, 100.0);
-	projection =
 		glm::ortho(-(40.0), 40.0,
-			-(40.0), 40.0,
-			0.0, 100.0);
+			(40.0), -40.0,
+			-250.0, 250.0);
+			//200.0, 0.0);
 	_shadowMapSceneData.proj = projection;
 	//IMAGE
 	VkExtent3D imageExtent = {
@@ -2052,5 +2041,46 @@ void VulkanEngine::initShadowMapResources()
 			vkDestroyPipelineLayout(_device, _shadowMeshPipelineLayout, nullptr);
 			vkDestroyPipeline(_device, _shadowMeshPipeline, nullptr);
 			});
+	}
+
+	{
+		//create debug image view 
+		VkImageViewCreateInfo info{};
+
+		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		info.pNext = nullptr;
+
+		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		info.image = _shadowMapImage.image;
+		info.format = _shadowMapImage.imageFormat;
+		info.subresourceRange.baseMipLevel = 0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		info.components = {
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_A
+		};
+
+
+		vkCreateImageView(_device, &info, nullptr, &_heightMapDebugImageView);
+		_mainDeletionQueue.pushFunction(
+			[=]() {
+				vkDestroyImageView(_device, _heightMapDebugImageView, nullptr);
+			});
+		//create debug descriptor set
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		VkDescriptorSetLayout layout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		_heightMapSamplerDescriptorSet = _globalDescriptorAllocator.allocate(_device, layout, nullptr);
+		DescriptorWriter writer;
+		writer.writeImage(0, _heightMapDebugImageView, _defaultSampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_device, _heightMapSamplerDescriptorSet);
+
+		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
 	}
 }
