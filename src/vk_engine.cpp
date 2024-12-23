@@ -1866,9 +1866,9 @@ void VulkanEngine::initHeightMap()
 void VulkanEngine::initShadowMapResources()
 {
 	glm::mat4 projection =
-		glm::ortho(-(200.0), 200.0,
-			(200.0), -200.0,
-			-2500.0, 2500.0);
+		glm::ortho(-(100.0), 100.0,
+			(100.0), -100.0,
+			-1250.0, 1250.0);
 			//200.0, 0.0);
 	_shadowMapSceneData.proj = projection;
 	//IMAGE
