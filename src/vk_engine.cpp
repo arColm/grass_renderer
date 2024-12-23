@@ -27,8 +27,8 @@
 #include "vk_buffers.hpp"
 
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
-const int VulkanEngine::SHADOWMAP_RESOLUTION = 2048;
-const int VulkanEngine::RENDER_DISTANCE = 100;
+const int VulkanEngine::SHADOWMAP_RESOLUTION = 8192;
+const int VulkanEngine::RENDER_DISTANCE = 300;
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -149,7 +149,8 @@ void VulkanEngine::draw()
 	//calculate shadow map
 	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	drawShadowMap(cmd);
-	
+	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
+
 		
 
 	//make the draw image into writable mode before rendering
@@ -175,7 +176,6 @@ void VulkanEngine::draw()
 	//prepare swapchain image to draw GUI
 	//	note: we use COLOR_ATTACHMENT_OPTIMAL when calling rendering commands
 	vkutil::transitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
 
 	drawImGui(cmd, _swapchainImageViews[swapchainImageIndex]);
 
@@ -314,7 +314,14 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+	{
+		VkDescriptorSet sets[] = {
+			sceneDataDescriptorSet,
+			_shadowMapDescriptorSet
+		};
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 0, 2, sets, 0, nullptr);
+		//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 1, 1, &_shadowMapDescriptorSet, 0, nullptr);
+	}
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -335,10 +342,11 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	VkDescriptorSet sets[] = {
 		sceneDataDescriptorSet,
+		_shadowMapDescriptorSet,
 		_grassDataDescriptorSet
 	};
-
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 2, sets, 0, nullptr);
+	//TODO maybe no need to rebind scenedata!!!
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipelineLayout, 0, 3, sets, 0, nullptr);
 	vkCmdPushConstants(cmd, _grassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -406,14 +414,20 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipeline);
 
 	GPUDrawPushConstants pushConstants{};
-	_sunPosition = glm::vec3(30 * _sceneData.sunlightDirection.x, 30 * _sceneData.sunlightDirection.y, 30 * _sceneData.sunlightDirection.z);
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
-	pushConstants.playerPosition = glm::vec4(_sunPosition.x, _sunPosition.y, _sunPosition.z, 0);
+	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+	{
+
+		VkDescriptorSet sets[] = {
+			sceneDataDescriptorSet,
+			_shadowMapDescriptorSet
+		};
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipelineLayout, 0, 2, sets, 0, nullptr);
+	}
 	vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -433,10 +447,11 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 
 	VkDescriptorSet sets[] = {
 		sceneDataDescriptorSet,
+		_shadowMapDescriptorSet,
 		_grassDataDescriptorSet
 	};
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 2, sets, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 3, sets, 0, nullptr);
 	vkCmdPushConstants(cmd, _shadowGrassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -700,12 +715,13 @@ void VulkanEngine::updateScene(float deltaTime)
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
 
-	_sunPosition = glm::vec3(-7 * _sceneData.sunlightDirection.x,-12 * _sceneData.sunlightDirection.y, -7 * _sceneData.sunlightDirection.z);
+	_sunPosition = glm::vec3(-370 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
+		-370 * _sceneData.sunlightDirection.y,
+		-370 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
-		glm::vec3(0), glm::vec3(0, 1, 0));
-	//_shadowMapSceneData.view = _sceneData.view;
-	//_shadowMapSceneData.proj = _sceneData.proj;
+		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
+	_sceneData.sunViewProj = _shadowMapSceneData.viewProj;
 }
 
 void VulkanEngine::initVulkan()
@@ -1079,7 +1095,6 @@ void VulkanEngine::initSampler()
 	samplerCreateInfo.pNext = nullptr;
 	samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
 	samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
-	samplerCreateInfo.compareEnable = VK_FALSE;
 
 	vkCreateSampler(_device, &samplerCreateInfo, nullptr, &_defaultSampler);
 
@@ -1179,14 +1194,17 @@ void VulkanEngine::initMeshPipeline()
 	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	//sets
-
+	VkDescriptorSetLayout layouts[] = {
+		_sceneDataDescriptorLayout,
+		_shadowMapDescriptorLayout
+	};
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+	pipelineLayoutInfo.setLayoutCount = 2;
+	pipelineLayoutInfo.pSetLayouts = layouts;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_meshPipelineLayout));
 
@@ -1257,6 +1275,7 @@ void VulkanEngine::initGrassPipeline()
 	//sets
 	VkDescriptorSetLayout layouts[] = {
 		_sceneDataDescriptorLayout,
+		_shadowMapDescriptorLayout,
 		_grassDataDescriptorLayout
 	};
 	//build pipeline layout that controls the input/outputs of shader
@@ -1264,7 +1283,7 @@ void VulkanEngine::initGrassPipeline()
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.setLayoutCount = 2;
+	pipelineLayoutInfo.setLayoutCount = 3;
 	pipelineLayoutInfo.pSetLayouts = layouts;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_grassPipelineLayout));
@@ -1385,9 +1404,10 @@ void VulkanEngine::initSceneData()
 	_sceneData.proj[1][1] *= -1;
 
 	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);
-	_sceneData.sunlightDirection = glm::vec4(2, -2, 2, 1);
+	_sceneData.sunlightDirection = glm::vec4(2, -2, 0, 1);
 	_sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
 	_sceneData.viewProj = _sceneData.proj*_sceneData.view;
+	_sceneData.sunViewProj = _sceneData.viewProj;
 }
 
 void VulkanEngine::initGround()
@@ -1846,9 +1866,9 @@ void VulkanEngine::initHeightMap()
 void VulkanEngine::initShadowMapResources()
 {
 	glm::mat4 projection =
-		glm::ortho(-(40.0), 40.0,
-			(40.0), -40.0,
-			-250.0, 250.0);
+		glm::ortho(-(200.0), 200.0,
+			(200.0), -200.0,
+			-2500.0, 2500.0);
 			//200.0, 0.0);
 	_shadowMapSceneData.proj = projection;
 	//IMAGE
@@ -1904,7 +1924,7 @@ void VulkanEngine::initShadowMapResources()
 		//	writing to descriptor set
 		_shadowMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _shadowMapDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _shadowMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(0, _shadowMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.updateSet(_device, _shadowMapDescriptorSet);
 	}
 	
@@ -1929,19 +1949,22 @@ void VulkanEngine::initShadowMapResources()
 		bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 		//sets TODO might have to make a new layout because no shadow map descriptor
-		VkDescriptorSetLayout layouts[] = {
-			_sceneDataDescriptorLayout,
-			_grassDataDescriptorLayout
-		};
-		//build pipeline layout that controls the input/outputs of shader
-		//	note: no descriptor sets or other yet.
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
-		pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
-		pipelineLayoutInfo.pushConstantRangeCount = 1;
-		pipelineLayoutInfo.setLayoutCount = 2;
-		pipelineLayoutInfo.pSetLayouts = layouts;
+		{
+			VkDescriptorSetLayout layouts[] = {
+				_sceneDataDescriptorLayout,
+				_shadowMapDescriptorLayout,
+				_grassDataDescriptorLayout
+			};
+			//build pipeline layout that controls the input/outputs of shader
+			//	note: no descriptor sets or other yet.
+			VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+			pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+			pipelineLayoutInfo.pushConstantRangeCount = 1;
+			pipelineLayoutInfo.setLayoutCount = 3;
+			pipelineLayoutInfo.pSetLayouts = layouts;
 
-		VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowGrassPipelineLayout));
+			VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowGrassPipelineLayout));
+		}
 
 		//CREATE PIPELINE
 		vkutil::PipelineBuilder pipelineBuilder;
@@ -2000,13 +2023,19 @@ void VulkanEngine::initShadowMapResources()
 
 		//build pipeline layout that controls the input/outputs of shader
 		//	note: no descriptor sets or other yet.
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
-		pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
-		pipelineLayoutInfo.pushConstantRangeCount = 1;
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+		{
+			VkDescriptorSetLayout layouts[] = {
+				_sceneDataDescriptorLayout,
+				_shadowMapDescriptorLayout
+			};
+			VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+			pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+			pipelineLayoutInfo.pushConstantRangeCount = 1;
+			pipelineLayoutInfo.setLayoutCount = 2;
+			pipelineLayoutInfo.pSetLayouts = layouts;
 
-		VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowMeshPipelineLayout));
+			VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_shadowMeshPipelineLayout));
+		}
 
 		//CREATE PIPELINE
 		vkutil::PipelineBuilder pipelineBuilder;

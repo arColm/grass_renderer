@@ -5,13 +5,14 @@
 
 #include "0_scene_data.glsl"
 
-layout (std140,set = 1, binding = 0) readonly buffer GrassData {
+layout (std140,set = 2, binding = 0) readonly buffer GrassData {
 	vec4 positions[];
 } grassData;
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
+layout (location = 3) out vec4 outLightSpacePos;
 
 struct Vertex {
 	vec3 position;
@@ -30,6 +31,7 @@ layout( push_constant ) uniform constants
 	mat4 render_matrix;
 	vec4 playerPosition;
 	VertexBuffer vertexBuffer;
+
 
 } PushConstants;
 
@@ -58,8 +60,10 @@ void main() {
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);
 	//gl_Position = sceneData.viewProj * position;
 
-	outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+	outNormal = rotationTowardsPlayer * (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
 	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
+
+	outLightSpacePos = sceneData.sunViewProj * PushConstants.render_matrix * vec4(position,1.0);
 }

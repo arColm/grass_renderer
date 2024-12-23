@@ -116,6 +116,7 @@ struct SceneData
     glm::vec4 ambientColor;
     glm::vec4 sunlightDirection; //w for sunlight strength
     glm::vec4 sunlightColor;
+    glm::mat4 sunViewProj;
 };
 
 struct GrassData
