@@ -42,7 +42,7 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	b.y =0 ;
 	float c = dot(a,b);
 	//float s = length(cross(a,b));
-	float s =  a.z * b.x - a.x * b.z;
+	float s =  (a.z * b.x - a.x * b.z);
 	matrix[0] = vec3(c,0,-s);
 	matrix[1] = vec3(0,1,0);
 	matrix[2] = vec3(s,0,c);
@@ -60,7 +60,9 @@ void main() {
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);
 	//gl_Position = sceneData.viewProj * position;
 
-	outNormal = rotationTowardsPlayer * (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+	outNormal = normalize((PushConstants.render_matrix * -vec4(sceneData.sunlightDirection.x,0,sceneData.sunlightDirection.z, 0)).xyz);
+
 	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;

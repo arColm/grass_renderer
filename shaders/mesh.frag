@@ -42,7 +42,7 @@ void main() {
 	
 	vec3 color = inColor;// * texture(colorTex,inUV).xyz;
 
-	float diffuseLight = max(dot(inNormal, -sceneData.sunlightDirection.xyz),0.5f);
+	float diffuseLight = max(dot(inNormal, -sceneData.sunlightDirection.xyz),0.3f);
 	vec3 ambientLight = vec3(0.1);//sceneData.ambientColor.xyz;
 	
 	float shadow = ShadowCalculation(inLightSpacePos);
