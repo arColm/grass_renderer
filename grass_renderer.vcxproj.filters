@@ -211,5 +211,8 @@
     <None Include="shaders\noise.glsl">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\windmap.comp">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -197,6 +197,7 @@
     <None Include="shaders\mesh.vert" />
     <None Include="shaders\noise.glsl" />
     <None Include="shaders\sky.comp" />
+    <None Include="shaders\windmap.comp" />
     <None Include="shaders\_vertex.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

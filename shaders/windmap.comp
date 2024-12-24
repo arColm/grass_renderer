@@ -1,0 +1,29 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+layout (local_size_x = 64) in;
+
+
+layout(rgba16f, set = 0, binding = 0) uniform image2D windMap;
+
+
+//push constants block
+layout( push_constant ) uniform constants
+{
+	//data1.x == time
+	vec4 data1;
+	vec4 data2;
+	vec4 data3;
+	vec4 data4;
+} PushConstants;
+
+#include "noise.glsl"
+
+void main() {
+	ivec2 mapSize = imageSize(windMap);
+
+	if(gl_GlobalInvocationID.x >=mapSize.x*mapSize.y) return;
+	ivec2 cell = ivec2(gl_GlobalInvocationID.x % mapSize.y,gl_GlobalInvocationID.x / mapSize.y);
+
+	vec4 windValue = vec4(sin(float(cell.x)*13),0,cos(float(cell.y)*31),0);
+	imageStore(windMap,cell,windValue);
+}

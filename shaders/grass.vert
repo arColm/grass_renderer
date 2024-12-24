@@ -9,6 +9,8 @@ layout (std140,set = 2, binding = 0) readonly buffer GrassData {
 	vec4 positions[];
 } grassData;
 
+layout(rgba16f,set = 2, binding = 1) readonly uniform image2D WindMap;
+
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
@@ -54,13 +56,14 @@ float getWindStrength(uint vertexIndex) {
 }
 
 void main() {
-	const vec3 windDirection = vec3(2,-0.1,2);//TEMP
+	vec3 grassBladePosition = grassData.positions[gl_InstanceIndex].xyz;
+	vec3 windDirection = imageLoad(WindMap,ivec2(abs(grassBladePosition.x),abs(grassBladePosition.z))).xyz;
 
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 	v.position += windDirection * getWindStrength(gl_VertexIndex);
 	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,normalize(PushConstants.playerPosition.xyz-grassData.positions[gl_InstanceIndex].xyz));
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
-	vec3 position = relativePosition + grassData.positions[gl_InstanceIndex].xyz;
+	vec3 position = relativePosition + grassBladePosition;
 
 	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;
 

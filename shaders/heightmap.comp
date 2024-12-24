@@ -10,7 +10,7 @@ layout(rgba16f,set = 0, binding = 0) uniform image2D data;
 
 
 float getHeight(vec2 coord) {
-	return 3*layeredNoise(coord,3,0.1,2,0.3);
+	return 6*layeredNoise(coord,3,0.1,2,0.3);
 }
 
 void main() {

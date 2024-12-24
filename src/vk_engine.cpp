@@ -144,7 +144,9 @@ void VulkanEngine::draw()
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //reset after executing once
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	calculateGrassData(cmd);
+	updateWindMap(cmd);
+	vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	updateGrassData(cmd);
 
 	//calculate shadow map
 	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -416,6 +418,7 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 	GPUDrawPushConstants pushConstants{};
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
+	//pushConstants.playerPosition = glm::vec4(_sunPosition.x, _sunPosition.y, _sunPosition.z, 0);
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
@@ -461,7 +464,7 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 	vkCmdEndRendering(cmd);
 }
 
-void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
+void VulkanEngine::updateGrassData(VkCommandBuffer cmd)
 {
 	_settingsChanged = false;
 	int newGrassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);
@@ -488,6 +491,7 @@ void VulkanEngine::calculateGrassData(VkCommandBuffer cmd)
 	_grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
 	DescriptorWriter writer;
 	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData) * _grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.writeImage(1, _windMapImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.updateSet(_device, _grassDataDescriptorSet);
 
 
@@ -711,17 +715,37 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 void VulkanEngine::updateScene(float deltaTime)
 {
+	_time += deltaTime;
 	_player.update(deltaTime);
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
 
-	_sunPosition = glm::vec3(-370 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
-		-370 * _sceneData.sunlightDirection.y,
-		-370 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
+		-30 * _sceneData.sunlightDirection.y,
+		-30 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
 		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
 	_sceneData.sunViewProj = _shadowMapSceneData.viewProj;
+}
+
+void VulkanEngine::updateWindMap(VkCommandBuffer cmd)
+{
+	int numCells = _windMapImage.imageExtent.width * _windMapImage.imageExtent.height;
+
+
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_time, 1, 1, 1);
+
+	//bind the gradient drawing compute pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _windMapComputePipeline);
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _windMapComputePipelineLayout, 0, 1, &_windMapDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _windMapComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+	//execute compute pipeline dispatch
+	vkCmdDispatch(cmd, std::ceil((float)(numCells) / 64.0),
+		1, 1);
+
 }
 
 void VulkanEngine::initVulkan()
@@ -979,6 +1003,7 @@ void VulkanEngine::initDescriptors()
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		_grassDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	{
@@ -1390,6 +1415,7 @@ void VulkanEngine::initDefaultData()
 	initHeightMap();
 	initGround();
 	initGrass();
+	initWindMap();
 }
 
 void VulkanEngine::initSceneData()
@@ -1753,7 +1779,7 @@ void VulkanEngine::initHeightMap()
 	//	descriptor layout
 	{
 		//	writing to descriptor set
-		_heightMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
+		_heightMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _heightMapDescriptorLayout);
 		DescriptorWriter writer;
 		writer.writeImage(0, _heightMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.updateSet(_device, _heightMapDescriptorSet);
@@ -1868,7 +1894,7 @@ void VulkanEngine::initShadowMapResources()
 	glm::mat4 projection =
 		glm::ortho(-(100.0), 100.0,
 			(100.0), -100.0,
-			-1250.0, 1250.0);
+			-1050.0, 1050.0);
 			//200.0, 0.0);
 	_shadowMapSceneData.proj = projection;
 	//IMAGE
@@ -2112,4 +2138,128 @@ void VulkanEngine::initShadowMapResources()
 
 		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
 	}
+}
+
+void VulkanEngine::initWindMap()
+{
+	//IMAGE
+	VkExtent3D imageExtent{
+		RENDER_DISTANCE*2,
+		RENDER_DISTANCE*2,
+		1
+	};
+
+	//hardcoding draw format to 16 bit float
+	_windMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;	
+	_windMapImage.imageExtent = imageExtent;
+
+	VkImageUsageFlags imageUsageFlags{};
+	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_windMapImage.imageFormat, imageUsageFlags, imageExtent);
+
+	//allocate draw image from gpu memory
+	VmaAllocationCreateInfo imgAllocInfo{};
+	imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+	//allocate and create image
+	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_windMapImage.image, &_windMapImage.allocation, nullptr);
+
+	//build image view for the draw image to use for rendering
+	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_windMapImage.imageFormat, _windMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_windMapImage.imageView));
+
+	//add to deletion queues
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _windMapImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _windMapImage.image, _windMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+		});
+	//DESCRIPTORS
+
+	//DESCRIPTOR SET LAYOUTS
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		_windMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+	}
+	//	deletion
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyDescriptorSetLayout(_device, _windMapDescriptorLayout, nullptr);
+		});
+	//DESCRIPTOR SETS
+	{
+		//	writing to descriptor set
+		_windMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _windMapDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _windMapImage.imageView, nullptr , VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.updateSet(_device, _windMapDescriptorSet);
+	}
+	//{
+	//	//	writing to GRASSDATA descriptor set
+	//	DescriptorWriter writer;
+	//	writer.writeImage(1, _windMapImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	//	writer.updateSet(_device, _grassDataDescriptorSet);
+	//}
+	//PIPELINE
+
+	VkShaderModule computeShader;
+	if (!vkutil::loadShaderModule("./shaders/windmap.comp.spv", _device, &computeShader))
+	{
+		fmt::print("error when building windmap compute shader module\n");
+	}
+	else
+	{
+		fmt::print("windmap compute shader loaded\n");
+	}
+
+	//push constant range
+	VkPushConstantRange computeBufferRange{};
+	computeBufferRange.offset = 0;
+	computeBufferRange.size = sizeof(ComputePushConstants);
+	computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	//sets
+
+	//build pipeline layout that controls the input/outputs of shader
+	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	computePipelineLayoutInfo.setLayoutCount = 1;
+	computePipelineLayoutInfo.pSetLayouts = &_windMapDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_windMapComputePipelineLayout));
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.pName = "main"; //name of entrypoint function
+	stageInfo.module = computeShader;
+
+	//create pipelines
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _windMapComputePipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_windMapComputePipeline));
+
+	//clean structures
+	vkDestroyShaderModule(_device, computeShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _windMapComputePipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _windMapComputePipeline, nullptr);
+		});
+
+	immediateSubmit(
+		[&](VkCommandBuffer cmd) {
+			vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		}
+	);
 }

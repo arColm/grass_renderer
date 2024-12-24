@@ -18,9 +18,9 @@ float ShadowCalculation(vec4 fragPosLightSpace) {
 	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
 	projCoords.xy = projCoords.xy *0.5 + 0.5;
 
-	//note we are just flooring here, could do better
 	float currentDepth = projCoords.z;
-    float bias = 0.0005;
+	//TODO we need a low bias for the grass shadows, but a higher bias to prevent moire on mesh --> different fragment shader?
+    float bias = 0.0001; 
 	float shadow = 0;
 	vec2 texelSize = 1.0/textureSize(shadowMap,0);
 	for(int x=-1;x<=1;x++)

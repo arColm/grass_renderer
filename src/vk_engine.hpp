@@ -143,6 +143,7 @@ public:
 	Player _player;
 	SceneData _sceneData;
 	glm::vec3 _sunPosition;
+	float _time = 0;
 
 	EngineStats _engineStats;
 	std::shared_ptr<MeshAsset> _groundMesh;
@@ -173,7 +174,7 @@ public:
 	VkImageView _heightMapDebugImageView;
 	VkDescriptorSet _heightMapSamplerDescriptorSet;
 
-	//shadowmap TODO
+	//shadowmap
 	static const int SHADOWMAP_RESOLUTION;
 	VkDescriptorSetLayout _shadowMapDescriptorLayout;
 	VkDescriptorSet _shadowMapDescriptorSet;
@@ -187,7 +188,11 @@ public:
 
 	//wind TODO
 	AllocatedImage _windMapImage;
-
+	VkPipelineLayout _windMapComputePipelineLayout; 
+	VkPipeline _windMapComputePipeline;
+	VkDescriptorSetLayout _windMapDescriptorLayout;
+	VkDescriptorSet _windMapDescriptorSet;
+	VkDescriptorSet _windMapSamplerDescriptorSet; //TODO
 
 
 	//initializes everything in engine
@@ -203,7 +208,7 @@ public:
 	void drawGeometry(VkCommandBuffer cmd);
 	void drawShadowMap(VkCommandBuffer cmd);
 
-	void calculateGrassData(VkCommandBuffer cmd);
+	void updateGrassData(VkCommandBuffer cmd);
 
 	//run main loop
 	void run();
@@ -218,6 +223,7 @@ public:
 
 	//scene
 	void updateScene(float deltaTime);
+	void updateWindMap(VkCommandBuffer cmd);
 private:
 
 	void initVulkan();
@@ -249,5 +255,6 @@ private:
 	void initGrass();
 	void initHeightMap();
 	void initShadowMapResources();
+	void initWindMap();
 
 };
