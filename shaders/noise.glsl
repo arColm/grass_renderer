@@ -1,6 +1,6 @@
 
 // 2D Random
-float random (in vec2 st) {
+highp float random (in vec2 st) {
     return fract(sin(dot(st.xy,
                          vec2(12.9898,78.233)))
                  * 43758.5453123);
@@ -30,6 +30,16 @@ float noise (in vec2 st) {
             (d - b) * u.x * u.y;
 }
 	
+float noise2(vec2 p){
+	vec2 ip = floor(p);
+	vec2 u = fract(p);
+	u = u*u*(3.0-2.0*u);
+	
+	float res = mix(
+		mix(random(ip),random(ip+vec2(1.0,0.0)),u.x),
+		mix(random(ip+vec2(0.0,1.0)),random(ip+vec2(1.0,1.0)),u.x),u.y);
+	return res*res;
+}
 float layeredNoise(vec2 p, int octaves, float initialPersistence) {
     float n = 0;
     float amplitude = 1.0;

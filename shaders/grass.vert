@@ -55,9 +55,31 @@ float getWindStrength(uint vertexIndex) {
 	return 0.1 * (vertexIndex/2);;
 }
 
+vec3 getWindDirection(vec3 grassBladePosition) {
+    vec3 i = floor(grassBladePosition);
+    vec3 f = fract(grassBladePosition);
+
+    // Four corners in 2D of a tile
+    vec3 a = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))).xyz;
+    vec3 b = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(1,0)).xyz;
+    vec3 c = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(0,1)).xyz;
+    vec3 d = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(1,1)).xyz;
+
+    // Smooth Interpolation
+
+    // Cubic Hermine Curve.  Same as SmoothStep()
+    //vec3 u = f*f*(3.0-2.0*f);
+    vec3 u = mix(vec3(0.),vec3(1.),f);
+
+    // Mix 4 coorners percentages
+    return mix(a, b, u.x) +
+            (c - a)* u.z * (1.0 - u.x) +
+            (d - b) * u.x * u.z;
+}
+
 void main() {
 	vec3 grassBladePosition = grassData.positions[gl_InstanceIndex].xyz;
-	vec3 windDirection = imageLoad(WindMap,ivec2(abs(grassBladePosition.x),abs(grassBladePosition.z))).xyz;
+	vec3 windDirection = getWindDirection(grassBladePosition);
 
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 	v.position += windDirection * getWindStrength(gl_VertexIndex);
@@ -74,6 +96,7 @@ void main() {
 	outNormal = normalize((PushConstants.render_matrix * -vec4(sceneData.sunlightDirection.x,0,sceneData.sunlightDirection.z, 0)).xyz);
 
 	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
+	//outColor = windDirection;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
 

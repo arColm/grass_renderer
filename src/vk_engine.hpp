@@ -192,6 +192,8 @@ public:
 	VkPipeline _windMapComputePipeline;
 	VkDescriptorSetLayout _windMapDescriptorLayout;
 	VkDescriptorSet _windMapDescriptorSet;
+
+	VkImageView _windMapDebugImageView;
 	VkDescriptorSet _windMapSamplerDescriptorSet; //TODO
 
 

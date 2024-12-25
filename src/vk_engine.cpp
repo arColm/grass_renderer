@@ -46,7 +46,7 @@ void VulkanEngine::init()
 	SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
 	_window = SDL_CreateWindow(
-		"vkGuide",
+		"Grass buh",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		_windowExtent.width, _windowExtent.height,
 		windowFlags
@@ -144,8 +144,8 @@ void VulkanEngine::draw()
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //reset after executing once
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	updateWindMap(cmd);
 	vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	updateWindMap(cmd);
 	updateGrassData(cmd);
 
 	//calculate shadow map
@@ -178,6 +178,7 @@ void VulkanEngine::draw()
 	//prepare swapchain image to draw GUI
 	//	note: we use COLOR_ATTACHMENT_OPTIMAL when calling rendering commands
 	vkutil::transitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	//vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	drawImGui(cmd, _swapchainImageViews[swapchainImageIndex]);
 
@@ -587,9 +588,9 @@ void VulkanEngine::run()
 			ImGui::End();
 		}
 
-		if (ImGui::Begin("height map"))
+		if (ImGui::Begin("wind map"))
 		{
-			ImGui::Image((ImTextureID)_heightMapSamplerDescriptorSet, ImVec2(800, 800));
+			ImGui::Image((ImTextureID)_windMapSamplerDescriptorSet, ImVec2(600,600));
 			ImGui::End();
 		}
 
@@ -1420,6 +1421,8 @@ void VulkanEngine::initDefaultData()
 
 void VulkanEngine::initSceneData()
 {
+	_player._position = glm::vec3(0, 5, 0);
+
 	_sceneData = SceneData{};
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.proj = glm::perspective(
@@ -2257,9 +2260,42 @@ void VulkanEngine::initWindMap()
 		vkDestroyPipeline(_device, _windMapComputePipeline, nullptr);
 		});
 
-	immediateSubmit(
-		[&](VkCommandBuffer cmd) {
-			vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		}
-	);
+	{
+		//create debug image view 
+		VkImageViewCreateInfo info{};
+
+		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		info.pNext = nullptr;
+
+		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		info.image = _windMapImage.image;
+		info.format = _windMapImage.imageFormat;
+		info.subresourceRange.baseMipLevel = 0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.components = {
+			VK_COMPONENT_SWIZZLE_R,
+			VK_COMPONENT_SWIZZLE_G,
+			VK_COMPONENT_SWIZZLE_B,
+			VK_COMPONENT_SWIZZLE_ONE
+		};
+		vkCreateImageView(_device, &info, nullptr, &_windMapDebugImageView);
+		_mainDeletionQueue.pushFunction(
+			[=]() {
+				vkDestroyImageView(_device, _windMapDebugImageView, nullptr);
+			});
+		//create debug descriptor set
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		VkDescriptorSetLayout layout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		_windMapSamplerDescriptorSet = _globalDescriptorAllocator.allocate(_device, layout, nullptr);
+		DescriptorWriter writer;
+		writer.writeImage(0, _windMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_device, _windMapSamplerDescriptorSet);
+
+		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
+	}
 }
