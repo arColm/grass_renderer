@@ -9,6 +9,8 @@ layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec4 outLightSpacePos;
+layout (location = 4) out vec3 outCameraPos;
+layout (location = 5) out vec3 outFragPos;
 
 struct Vertex {
 	vec3 position;
@@ -42,4 +44,6 @@ void main() {
 	outUV.y = v.uv_y;
 	
 	outLightSpacePos = sceneData.sunViewProj * PushConstants.render_matrix  * position;
+	outCameraPos = PushConstants.playerPosition.xyz;
+	outFragPos = position.xyz;
 }

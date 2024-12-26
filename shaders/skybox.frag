@@ -47,6 +47,6 @@ void main() {
 	vec4 color = vec4(mix(bottomColor,topColor,normalizedHeight), 1.0f);
 
 	//sun color
-	color = mix(color,vec4(sunColor,1.0f),miePhase(clamp(0,1,dot(normalizedPos,normalize(-sceneData.sunlightDirection.xyz)))));
+	color = mix(color,vec4(sunColor,1.0f),miePhase(dot(normalizedPos,normalize(-sceneData.sunlightDirection.xyz))));
 	outFragColor = color;
 }

@@ -15,6 +15,8 @@ layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec4 outLightSpacePos;
+layout (location = 4) out vec3 outCameraPos;
+layout (location = 5) out vec3 outFragPos;
 
 struct Vertex {
 	vec3 position;
@@ -55,7 +57,7 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 }
 
 float getWindStrength(uint vertexIndex) {
-	return 0.1 * (vertexIndex*vertexIndex/9);
+	return clamp(0.1 * (vertexIndex*vertexIndex/9),0,1);
 }
 
 vec3 getWindDirection(vec3 grassBladePosition) {
@@ -83,6 +85,7 @@ vec3 getWindDirection(vec3 grassBladePosition) {
 mat3 getGrassRotationMatrix(vec3 vNormal,vec3 playerPosition, vec3 grassPosition) {
 	vec3 a = vNormal;
 	vec3 b = normalize((playerPosition + 10*(random(grassPosition.xz)-0.5))-grassPosition);
+	//vec3 b = vec3(sin(10*(random(grassPosition.xz)-0.5)),0,cos(10*(random(grassPosition.xz)-0.5)));
 	mat3 matrix;
 	a.y = 0;
 	b.y =0 ;
@@ -105,14 +108,22 @@ void main() {
 	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,PushConstants.playerPosition.xyz,grassData.positions[gl_InstanceIndex].xyz);
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
 	vec3 position = relativePosition + grassBladePosition;
-	position+= windDirection * getWindStrength(gl_VertexIndex);
+
+	vec3 windOffset = (windDirection * getWindStrength(gl_VertexIndex));
+	windOffset.y += -length(windOffset)*0.5;
+	position+= windOffset;
 	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;
 
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);
 	//gl_Position = sceneData.viewProj * position;
 
 	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outNormal = normalize((PushConstants.render_matrix * -vec4(sceneData.sunlightDirection.x-v.position.x,random(grassBladePosition.xz),sceneData.sunlightDirection.z-v.position.x, 0)).xyz);
+	outNormal = normalize((PushConstants.render_matrix * -vec4(
+		sceneData.sunlightDirection.x-(v.position.x+windOffset.x*3),
+		0.3*abs(random(grassBladePosition.xz)),
+		sceneData.sunlightDirection.z-(v.position.x+windOffset.z*3),
+		0)).xyz);
+	//outNormal = normalize(rotationTowardsPlayer*normalize(v.normal + vec3(random(grassBladePosition.xz))));
 
 	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
 	//outColor = abs(outNormal);
@@ -121,4 +132,6 @@ void main() {
 	outUV.y = v.uv_y;
 
 	outLightSpacePos = sceneData.sunViewProj * PushConstants.render_matrix * vec4(position,1.0);
+	outCameraPos = PushConstants.playerPosition.xyz;
+	outFragPos = position;
 }
