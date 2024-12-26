@@ -728,10 +728,13 @@ void VulkanEngine::updateScene(float deltaTime)
 	_player.update(deltaTime);
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
+	_sceneData.sunlightDirection = glm::rotate(_time * 0.3f, glm::vec3(1, 0, 0)) * glm::vec4(1,1,0,1);
+
 
 	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
 		-30 * _sceneData.sunlightDirection.y,
 		-30 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
 		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
@@ -1254,7 +1257,7 @@ void VulkanEngine::initMeshPipeline()
 	//	polygon mode
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	//	cull mode
-	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
 	//	disable blending
@@ -1446,6 +1449,11 @@ void VulkanEngine::initSceneData()
 	_sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
 	_sceneData.viewProj = _sceneData.proj*_sceneData.view;
 	_sceneData.sunViewProj = _sceneData.viewProj;
+
+
+	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
+		-30 * _sceneData.sunlightDirection.y,
+		-30 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
 }
 
 void VulkanEngine::initGround()
