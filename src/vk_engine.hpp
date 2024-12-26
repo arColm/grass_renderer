@@ -197,7 +197,7 @@ public:
 	VkDescriptorSet _windMapSamplerDescriptorSet;
 
 	//skybox
-	MeshAsset _skyboxMesh; //TODO
+	std::shared_ptr<MeshAsset> _skyboxMesh;
 	VkPipelineLayout _skyboxPipelineLayout; //TODO
 	VkPipeline _skyboxPipeline; //TODO
 

@@ -307,12 +307,20 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	//draw mesh
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	GPUDrawPushConstants pushConstants{};
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
+	//draw skybox
+	pushConstants.vertexBuffer = _skyboxMesh->meshBuffers.vertexBufferAddress;
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _skyboxPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _skyboxPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd,_skyboxPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _skyboxMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd, _skyboxMesh->surfaces[0].count, 1, _skyboxMesh->surfaces[0].startIndex, 0, 0);
+
+	//draw mesh
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	//draw loaded test mesh
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
@@ -1417,6 +1425,7 @@ void VulkanEngine::initDefaultData()
 	initGround();
 	initGrass();
 	initWindMap();
+	initSkybox();
 }
 
 void VulkanEngine::initSceneData()
@@ -1444,10 +1453,6 @@ void VulkanEngine::initGround()
 	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
 
-	std::array<Vertex, 4> vertices{};
-	glm::vec4 color{ 0.14f,0.32f,0.08f,1.0f };
-
-	//
 	uint32_t numVerticesPerSide = (RENDER_DISTANCE * 2 + 2);
 	const size_t vertexBufferSize = numVerticesPerSide * numVerticesPerSide;
 	const size_t indexBufferSize = (numVerticesPerSide - 1) * (numVerticesPerSide - 1) * 6;
@@ -2282,18 +2287,20 @@ void VulkanEngine::initWindMap()
 
 void VulkanEngine::initSkybox()
 {
+	GPUMeshBuffers meshBuffers{};
+	MeshAsset meshAsset{};
 
-	const glm::vec3 vertices[] = {
-		glm::vec3(-1.f, -1.f, -1.f),
-		glm::vec3(1.f, -1.f, -1.f),
-		glm::vec3(-1.f, 1.f, -1.f),
-		glm::vec3(1.f, 1.f, -1.f),
-		glm::vec3(-1.f, -1.f, 1.f),
-		glm::vec3(1.f, -1.f, 1.f),
-		glm::vec3(-1.f, 1.f, 1.f),
-		glm::vec3(1.f, 1.f, 1.f)
+	const std::vector<glm::vec4> vertices {
+		glm::vec4(-1.f, -1.f, -1.f,1.0f),
+		glm::vec4(1.f, -1.f, -1.f,1.0f),
+		glm::vec4(-1.f, 1.f, -1.f,1.0f),
+		glm::vec4(1.f, 1.f, -1.f,1.0f),
+		glm::vec4(-1.f, -1.f, 1.f,1.0f),
+		glm::vec4(1.f, -1.f, 1.f,1.0f),
+		glm::vec4(-1.f, 1.f, 1.f,1.0f),
+		glm::vec4(1.f, 1.f, 1.f,1.0f)
 	};
-	const int indices[] = {
+	const std::vector<uint32_t> indices({
 		0,1,2,
 		1,3,2,
 		0,5,1,
@@ -2306,7 +2313,153 @@ void VulkanEngine::initSkybox()
 		4,7,5,
 		2,3,6,
 		3,7,6
-	};
+	});
 
+	const size_t vertexBufferSize = vertices.size() * sizeof(glm::vec4);
+	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+	//create vertex buffer
+	meshBuffers.vertexBuffer = createBuffer(
+		vertexBufferSize,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	//find address of vertex buffer
+	VkBufferDeviceAddressInfo deviceAddressInfo{};
+	deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	deviceAddressInfo.pNext = nullptr;
+	deviceAddressInfo.buffer = meshBuffers.vertexBuffer.buffer;
+	meshBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo);
+
+	//create index buffer
+	meshBuffers.indexBuffer = createBuffer(
+		indexBufferSize,
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	AllocatedBuffer staging = createBuffer(
+		vertexBufferSize + indexBufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = staging.allocation->GetMappedData();
+
+	//copy vertex buffer
+	memcpy(data, vertices.data(), vertexBufferSize);
+	//copy index buffer
+	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	//	note:	with this we have to wait for GPU commmands to finish before uploading
+	//			usually we have a DEDICATED BACKGROUND THREAD/COMMAND BUFFER to handle transfers
+	immediateSubmit([&](VkCommandBuffer cmd) {
+		VkBufferCopy vertexCopy{ 0 };
+		vertexCopy.dstOffset = 0;
+		vertexCopy.srcOffset = 0;
+		vertexCopy.size = vertexBufferSize;
+		vkCmdCopyBuffer(cmd, staging.buffer, meshBuffers.vertexBuffer.buffer, 1, &vertexCopy);
+
+		VkBufferCopy indexCopy{ 0 };
+		indexCopy.dstOffset = 0;
+		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.size = indexBufferSize;
+		vkCmdCopyBuffer(cmd, staging.buffer, meshBuffers.indexBuffer.buffer, 1, &indexCopy);
+		});
+
+	destroyBuffer(staging);
+
+
+	std::vector<GeoSurface> surfaces;
+	surfaces.resize(1);
+	surfaces[0].startIndex = static_cast<uint32_t>(0);
+	surfaces[0].count = static_cast<uint32_t>(indices.size());
+
+	meshAsset.name = "skybox";
+	meshAsset.surfaces = surfaces;
+	meshAsset.meshBuffers = meshBuffers;
+
+	_skyboxMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+	//vkDestroyShaderModule(_device, vertexComputeShader, nullptr);
+	_mainDeletionQueue.pushFunction(
+		[&]() {
+			destroyBuffer(_skyboxMesh->meshBuffers.vertexBuffer);
+			destroyBuffer(_skyboxMesh->meshBuffers.indexBuffer);
+
+		}
+	);
+
+
+	VkShaderModule fragShader;
+	if (!vkutil::loadShaderModule("./shaders/skybox.frag.spv", _device, &fragShader))
+	{
+		fmt::print("error when building skybox fragmentshader module");
+	}
+	else
+	{
+		fmt::print("skybox fragment shader loaded");
+	}
+	VkShaderModule vertShader;
+	if (!vkutil::loadShaderModule("./shaders/skybox.vert.spv", _device, &vertShader))
+	{
+		fmt::print("error when building skybox vertex shader module");
+	}
+	else
+	{
+		fmt::print("skybox vertex shader loaded");
+	}
+
+	//push constant range
+	VkPushConstantRange bufferRange{};
+	bufferRange.offset = 0;
+	bufferRange.size = sizeof(GPUDrawPushConstants);
+	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	//sets
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_skyboxPipelineLayout));
+
+	//CREATE PIPELINE
+	vkutil::PipelineBuilder pipelineBuilder;
+
+	//	pipeline layout
+	pipelineBuilder._pipelineLayout = _skyboxPipelineLayout;
+	//	connect vertex and fragment shaders to pipeline
+	pipelineBuilder.setShaders(vertShader, fragShader);
+	//	input topology
+	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	//	polygon mode
+	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	//	cull mode
+	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	//	disable multisampling
+	pipelineBuilder.setMultisamplingNone();
+	//	disable blending
+	pipelineBuilder.enableBlendingAlphaBlend();
+	// depth testing
+	//pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+	pipelineBuilder.disableDepthTest();
+
+	//connect image format we will draw to, from draw image
+	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
+
+	//build pipeline
+	_skyboxPipeline = pipelineBuilder.buildPipeline(_device);
+
+	//clean structures
+	vkDestroyShaderModule(_device, fragShader, nullptr);
+	vkDestroyShaderModule(_device, vertShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _skyboxPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _skyboxPipeline, nullptr);
+		});
 
 }
