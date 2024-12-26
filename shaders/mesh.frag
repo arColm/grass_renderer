@@ -52,7 +52,7 @@ void main() {
 	
 	float shadow = ShadowCalculation(inLightSpacePos);
 	
-	vec3 light = specularLight + ambientLight + (1.0-shadow) * (diffuseLight) * sceneData.sunlightDirection.w;
+	vec3 light = ambientLight + (1.0-shadow) * (diffuseLight+specularLight) * sceneData.sunlightDirection.w;
 	//light = specularLight;
 
 	outFragColor = vec4(color * light, 1.0f);

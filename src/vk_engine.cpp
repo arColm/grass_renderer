@@ -729,11 +729,12 @@ void VulkanEngine::updateScene(float deltaTime)
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
 	_sceneData.sunlightDirection = glm::rotate(_time * 0.3f, glm::vec3(1, 0, 0)) * glm::vec4(1,1,0,1);
+	_sceneData.sunlightDirection.w = -_sceneData.sunlightDirection.y;
 
 
-	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
-		-30 * _sceneData.sunlightDirection.y,
-		-30 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+	_sunPosition = glm::vec3(-20 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
+		-20 * _sceneData.sunlightDirection.y,
+		-20 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
 
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
 		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
