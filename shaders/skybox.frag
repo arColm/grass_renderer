@@ -36,8 +36,18 @@ float miePhase (float cosTheta)
 void main() {
 	//vec3 topColor = vec3(0.906,0.984,0.988);
 	//vec3 bottomColor = vec3(0.988,0.78,0.408);
-	vec3 topColor = vec3(0.694, 0.922, 0.914);
-	vec3 bottomColor = vec3(1);
+	vec3 normalizedSunPos = normalize(-sceneData.sunlightDirection.xyz);
+
+	vec3 topColorDay = vec3(0.694, 0.922, 0.914);
+	vec3 bottomColorDay = vec3(1);
+	//vec3 topColorNight = vec3( 0.1, 0.2, 0.4 );
+	//vec3 bottomColorNight = vec3( 0.01, 0.02, 0.05 );
+	vec3 topColorNight = vec3( 0.01, 0.02, 0.05 );
+	vec3 bottomColorNight = vec3( 0 );
+
+	vec3 topColor = mix(topColorNight,topColorDay,max(0,normalizedSunPos.y));
+	vec3 bottomColor = mix(bottomColorNight,bottomColorDay,max(0,normalizedSunPos.y));
+
 	vec3 sunColor = vec3(0.961, 0.8, 0.635);
 
 	vec3 normalizedPos = normalize(inPosition);
@@ -47,6 +57,6 @@ void main() {
 	vec4 color = vec4(mix(bottomColor,topColor,normalizedHeight), 1.0f);
 
 	//sun color
-	color = mix(color,vec4(sunColor,1.0f),miePhase(dot(normalizedPos,normalize(-sceneData.sunlightDirection.xyz))));
+	color = mix(color,vec4(sunColor,1.0f),miePhase(max(0,dot(normalizedPos,normalizedSunPos))));
 	outFragColor = color;
 }
