@@ -100,12 +100,12 @@ void main() {
 	vec3 windDirection = getWindDirection(grassBladePosition);
 
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	v.position += windDirection * getWindStrength(gl_VertexIndex);
+	//v.position += windDirection * getWindStrength(gl_VertexIndex);
 
 	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,PushConstants.playerPosition.xyz,grassData.positions[gl_InstanceIndex].xyz);
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
 	vec3 position = relativePosition + grassBladePosition;
-
+	position+= windDirection * getWindStrength(gl_VertexIndex);
 	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;
 
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);

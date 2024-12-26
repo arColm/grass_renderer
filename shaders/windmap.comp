@@ -29,5 +29,6 @@ void main() {
 	float noiseValue = cnoise(vec3(cell.x+time*0.1,cell.y+time*0.4,0.3*time));//+vec2(time*0.7,time*0.3));
 	//vec4 windValue = vec4(sin(noiseValue),0,cos(noiseValue*5),0);
 	vec4 windValue = clamp(vec4(0.),vec4(1.),vec4(noiseValue,noiseValue,noiseValue,1));
+	windValue = mix(vec4(0),windValue,clamp(0,1,sin(cell.y*0.1+cell.x*0.4+time)));
 	imageStore(windMap,cell,windValue);
 }
