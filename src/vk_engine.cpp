@@ -158,12 +158,12 @@ void VulkanEngine::draw()
 	//make the draw image into writable mode before rendering
 	//note: for read-only iamge or rasterized image, GENERAL is not optimal
 	//		but for compute-shader written images, GENERAL is the best
-	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL); 
+	//vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL); 
 
 	//render
-	drawBackground(cmd);
+	//drawBackground(cmd);
 
-	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	
 	//calculate grass positions
@@ -318,6 +318,14 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd,_skyboxPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _skyboxMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _skyboxMesh->surfaces[0].count, 1, _skyboxMesh->surfaces[0].startIndex, 0, 0);
+
+	//draw clouds
+	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindIndexBuffer(cmd, _cloudMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	//vkCmdDrawIndexed(cmd, _cloudMesh->surfaces[0].count, 1, _cloudMesh->surfaces[0].startIndex, 0, 0);
 
 	//draw mesh
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
@@ -585,6 +593,7 @@ void VulkanEngine::run()
 			if (ImGui::Button("Apply Changes"))
 				_settingsChanged = true;
 
+			ImGui::Checkbox("Day/Night Cycle", &_isSunMoving);
 			ImGui::End();
 		}
 
@@ -596,7 +605,7 @@ void VulkanEngine::run()
 			ImGui::End();
 		}
 
-		if (ImGui::Begin("wind map"))
+		if (false && ImGui::Begin("wind map"))
 		{
 			ImGui::Image((ImTextureID)_windMapSamplerDescriptorSet, ImVec2(600,600));
 			ImGui::End();
@@ -728,18 +737,22 @@ void VulkanEngine::updateScene(float deltaTime)
 	_player.update(deltaTime);
 	_sceneData.view = _player.getViewMatrix();
 	_sceneData.viewProj = _sceneData.proj * _sceneData.view;
-	_sceneData.sunlightDirection = glm::rotate(_time * 0.3f, glm::vec3(1, 0, 0)) * glm::vec4(1,1,0,1);
-	_sceneData.sunlightDirection.w = -_sceneData.sunlightDirection.y;
+	if (_isSunMoving)
+	{
+		_sceneData.sunlightDirection = glm::rotate(_time * 0.3f, glm::vec3(1, 0, 0)) * glm::vec4(1, 1, 0, 1);
+		_sceneData.sunlightDirection.w = -_sceneData.sunlightDirection.y;
 
 
-	_sunPosition = glm::vec3(-20 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
-		-20 * _sceneData.sunlightDirection.y,
-		-20 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+		_sunPosition = glm::vec3(-20 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
+			-20 * _sceneData.sunlightDirection.y,
+			-20 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+	}
 
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
 		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
 	_sceneData.sunViewProj = _shadowMapSceneData.viewProj;
+	_sceneData.time = glm::vec4(_time, _time / 2, 0, 0);
 }
 
 void VulkanEngine::updateWindMap(VkCommandBuffer cmd)
@@ -1430,6 +1443,7 @@ void VulkanEngine::initDefaultData()
 	initGrass();
 	initWindMap();
 	initSkybox();
+	initClouds();
 }
 
 void VulkanEngine::initSceneData()
@@ -1455,6 +1469,8 @@ void VulkanEngine::initSceneData()
 	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
 		-30 * _sceneData.sunlightDirection.y,
 		-30 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
+
+	_sceneData.time = glm::vec4(_time, _time / 2, 0, 0);
 }
 
 void VulkanEngine::initGround()
@@ -2469,6 +2485,172 @@ void VulkanEngine::initSkybox()
 	_mainDeletionQueue.pushFunction([&]() {
 		vkDestroyPipelineLayout(_device, _skyboxPipelineLayout, nullptr);
 		vkDestroyPipeline(_device, _skyboxPipeline, nullptr);
+		});
+
+}
+
+void VulkanEngine::initClouds()
+{
+
+	GPUMeshBuffers meshBuffers{};
+	MeshAsset meshAsset{};
+
+	const std::vector<glm::vec4> vertices{
+		glm::vec4(-RENDER_DISTANCE/2, 50.9f, -RENDER_DISTANCE / 2,1.0f),
+		glm::vec4(RENDER_DISTANCE / 2, 50.9f, -RENDER_DISTANCE / 2,1.0f),
+		glm::vec4(-RENDER_DISTANCE / 2, 50.9f, RENDER_DISTANCE / 2,1.0f),
+		glm::vec4(RENDER_DISTANCE / 2, 50.9f, RENDER_DISTANCE / 2,1.0f)
+	};
+	const std::vector<uint32_t> indices({
+		0,1,2,
+		1,3,2
+		});
+
+	const size_t vertexBufferSize = vertices.size() * sizeof(glm::vec4);
+	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+	//create vertex buffer
+	meshBuffers.vertexBuffer = createBuffer(
+		vertexBufferSize,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	//find address of vertex buffer
+	VkBufferDeviceAddressInfo deviceAddressInfo{};
+	deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	deviceAddressInfo.pNext = nullptr;
+	deviceAddressInfo.buffer = meshBuffers.vertexBuffer.buffer;
+	meshBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo);
+
+	//create index buffer
+	meshBuffers.indexBuffer = createBuffer(
+		indexBufferSize,
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	AllocatedBuffer staging = createBuffer(
+		vertexBufferSize + indexBufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = staging.allocation->GetMappedData();
+
+	//copy vertex buffer
+	memcpy(data, vertices.data(), vertexBufferSize);
+	//copy index buffer
+	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	//	note:	with this we have to wait for GPU commmands to finish before uploading
+	//			usually we have a DEDICATED BACKGROUND THREAD/COMMAND BUFFER to handle transfers
+	immediateSubmit([&](VkCommandBuffer cmd) {
+		VkBufferCopy vertexCopy{ 0 };
+		vertexCopy.dstOffset = 0;
+		vertexCopy.srcOffset = 0;
+		vertexCopy.size = vertexBufferSize;
+		vkCmdCopyBuffer(cmd, staging.buffer, meshBuffers.vertexBuffer.buffer, 1, &vertexCopy);
+
+		VkBufferCopy indexCopy{ 0 };
+		indexCopy.dstOffset = 0;
+		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.size = indexBufferSize;
+		vkCmdCopyBuffer(cmd, staging.buffer, meshBuffers.indexBuffer.buffer, 1, &indexCopy);
+		});
+
+	destroyBuffer(staging);
+
+
+	std::vector<GeoSurface> surfaces;
+	surfaces.resize(1);
+	surfaces[0].startIndex = static_cast<uint32_t>(0);
+	surfaces[0].count = static_cast<uint32_t>(indices.size());
+
+	meshAsset.name = "clouds";
+	meshAsset.surfaces = surfaces;
+	meshAsset.meshBuffers = meshBuffers;
+
+	_cloudMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+	//vkDestroyShaderModule(_device, vertexComputeShader, nullptr);
+	_mainDeletionQueue.pushFunction(
+		[&]() {
+			destroyBuffer(_cloudMesh->meshBuffers.vertexBuffer);
+			destroyBuffer(_cloudMesh->meshBuffers.indexBuffer);
+
+		}
+	);
+
+
+	VkShaderModule fragShader;
+	if (!vkutil::loadShaderModule("./shaders/cloud.frag.spv", _device, &fragShader))
+	{
+		fmt::print("error when building cloud fragmentshader module");
+	}
+	else
+	{
+		fmt::print("cloud fragment shader loaded");
+	}
+	VkShaderModule vertShader;
+	if (!vkutil::loadShaderModule("./shaders/cloud.vert.spv", _device, &vertShader))
+	{
+		fmt::print("error when building cloud vertex shader module");
+	}
+	else
+	{
+		fmt::print("cloud vertex shader loaded");
+	}
+
+	//push constant range
+	VkPushConstantRange bufferRange{};
+	bufferRange.offset = 0;
+	bufferRange.size = sizeof(GPUDrawPushConstants);
+	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	//sets
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_cloudPipelineLayout));
+
+	//CREATE PIPELINE
+	vkutil::PipelineBuilder pipelineBuilder;
+
+	//	pipeline layout
+	pipelineBuilder._pipelineLayout = _cloudPipelineLayout;
+	//	connect vertex and fragment shaders to pipeline
+	pipelineBuilder.setShaders(vertShader, fragShader);
+	//	input topology
+	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	//	polygon mode
+	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	//	cull mode
+	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	//	disable multisampling
+	pipelineBuilder.setMultisamplingNone();
+	//	disable blending
+	pipelineBuilder.enableBlendingAlphaBlend();
+	// depth testing
+	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+	//pipelineBuilder.disableDepthTest();
+
+	//connect image format we will draw to, from draw image
+	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
+
+	//build pipeline
+	_cloudPipeline = pipelineBuilder.buildPipeline(_device);
+
+	//clean structures
+	vkDestroyShaderModule(_device, fragShader, nullptr);
+	vkDestroyShaderModule(_device, vertShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _cloudPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _cloudPipeline, nullptr);
 		});
 
 }

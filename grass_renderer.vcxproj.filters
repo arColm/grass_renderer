@@ -220,5 +220,11 @@
     <None Include="shaders\skybox.vert">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\cloud.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\cloud.vert">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

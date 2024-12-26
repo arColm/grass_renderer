@@ -144,6 +144,7 @@ public:
 	SceneData _sceneData;
 	glm::vec3 _sunPosition;
 	float _time = 0;
+	bool _isSunMoving = true;
 
 	EngineStats _engineStats;
 	std::shared_ptr<MeshAsset> _groundMesh;
@@ -198,9 +199,13 @@ public:
 
 	//skybox
 	std::shared_ptr<MeshAsset> _skyboxMesh;
-	VkPipelineLayout _skyboxPipelineLayout; //TODO
-	VkPipeline _skyboxPipeline; //TODO
+	VkPipelineLayout _skyboxPipelineLayout;
+	VkPipeline _skyboxPipeline; 
 
+	//clouds
+	std::shared_ptr<MeshAsset> _cloudMesh;
+	VkPipelineLayout _cloudPipelineLayout;
+	VkPipeline _cloudPipeline;
 
 	//initializes everything in engine
 	void init();
@@ -214,7 +219,6 @@ public:
 	void drawImGui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawGeometry(VkCommandBuffer cmd);
 	void drawShadowMap(VkCommandBuffer cmd);
-	void drawSkybox(VkCommandBuffer cmd);
 
 	void updateGrassData(VkCommandBuffer cmd);
 
@@ -265,5 +269,6 @@ private:
 	void initShadowMapResources();
 	void initWindMap();
 	void initSkybox();
+	void initClouds();
 
 };
