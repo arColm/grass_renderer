@@ -214,5 +214,11 @@
     <None Include="shaders\windmap.comp">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\skybox.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\skybox.vert">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

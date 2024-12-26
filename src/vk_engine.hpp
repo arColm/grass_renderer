@@ -186,7 +186,7 @@ public:
 	VkPipeline _shadowGrassPipeline; 
 
 
-	//wind TODO
+	//wind
 	AllocatedImage _windMapImage;
 	VkPipelineLayout _windMapComputePipelineLayout; 
 	VkPipeline _windMapComputePipeline;
@@ -194,7 +194,12 @@ public:
 	VkDescriptorSet _windMapDescriptorSet;
 
 	VkImageView _windMapDebugImageView;
-	VkDescriptorSet _windMapSamplerDescriptorSet; //TODO
+	VkDescriptorSet _windMapSamplerDescriptorSet;
+
+	//skybox
+	MeshAsset _skyboxMesh; //TODO
+	VkPipelineLayout _skyboxPipelineLayout; //TODO
+	VkPipeline _skyboxPipeline; //TODO
 
 
 	//initializes everything in engine
@@ -209,6 +214,7 @@ public:
 	void drawImGui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawGeometry(VkCommandBuffer cmd);
 	void drawShadowMap(VkCommandBuffer cmd);
+	void drawSkybox(VkCommandBuffer cmd);
 
 	void updateGrassData(VkCommandBuffer cmd);
 
@@ -258,5 +264,6 @@ private:
 	void initHeightMap();
 	void initShadowMapResources();
 	void initWindMap();
+	void initSkybox();
 
 };

@@ -37,6 +37,9 @@ layout( push_constant ) uniform constants
 
 } PushConstants;
 
+float random(vec2 co){
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	mat3 matrix;
@@ -52,7 +55,7 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 }
 
 float getWindStrength(uint vertexIndex) {
-	return 0.1 * (vertexIndex/2);;
+	return 0.1 * (vertexIndex*vertexIndex/9);
 }
 
 vec3 getWindDirection(vec3 grassBladePosition) {
@@ -77,13 +80,29 @@ vec3 getWindDirection(vec3 grassBladePosition) {
             (d - b) * u.x * u.z;
 }
 
+mat3 getGrassRotationMatrix(vec3 vNormal,vec3 playerPosition, vec3 grassPosition) {
+	vec3 a = vNormal;
+	vec3 b = normalize((playerPosition + 10*(random(grassPosition.xz)-0.5))-grassPosition);
+	mat3 matrix;
+	a.y = 0;
+	b.y =0 ;
+	float c = dot(a,b);
+	//float s = length(cross(a,b));
+	float s =  (a.z * b.x - a.x * b.z);
+	matrix[0] = vec3(c,0,-s);
+	matrix[1] = vec3(0,1,0);
+	matrix[2] = vec3(s,0,c);
+	return matrix;
+}
+
 void main() {
 	vec3 grassBladePosition = grassData.positions[gl_InstanceIndex].xyz;
 	vec3 windDirection = getWindDirection(grassBladePosition);
 
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 	v.position += windDirection * getWindStrength(gl_VertexIndex);
-	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,normalize(PushConstants.playerPosition.xyz-grassData.positions[gl_InstanceIndex].xyz));
+
+	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,PushConstants.playerPosition.xyz,grassData.positions[gl_InstanceIndex].xyz);
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
 	vec3 position = relativePosition + grassBladePosition;
 
@@ -93,9 +112,10 @@ void main() {
 	//gl_Position = sceneData.viewProj * position;
 
 	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outNormal = normalize((PushConstants.render_matrix * -vec4(sceneData.sunlightDirection.x,0,sceneData.sunlightDirection.z, 0)).xyz);
+	outNormal = normalize((PushConstants.render_matrix * -vec4(sceneData.sunlightDirection.x-v.position.x,random(grassBladePosition.xz),sceneData.sunlightDirection.z-v.position.x, 0)).xyz);
 
 	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
+	//outColor = abs(outNormal);
 	//outColor = windDirection;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;

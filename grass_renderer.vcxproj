@@ -197,6 +197,8 @@
     <None Include="shaders\mesh.vert" />
     <None Include="shaders\noise.glsl" />
     <None Include="shaders\sky.comp" />
+    <None Include="shaders\skybox.frag" />
+    <None Include="shaders\skybox.vert" />
     <None Include="shaders\windmap.comp" />
     <None Include="shaders\_vertex.glsl" />
   </ItemGroup>

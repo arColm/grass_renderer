@@ -60,7 +60,8 @@ void main() {
 	v.uv_x = 0;
 	v.uv_y = 0;
 	v.normal = mapData.xyz;
-	v.color = vec4(0.07,0.15*(1+y/10),0.09,1.0);
+	//v.color = vec4(0.07,0.15*(1+y/10),0.09,1.0);
+	v.color = vec4(0.14f,0.32f*(1+y/10),0.08f,1.0f);
 	//v.color = vec4(v.normal,1.0);
 	
 	uint vertexIndex = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * numVerticesPerSide;

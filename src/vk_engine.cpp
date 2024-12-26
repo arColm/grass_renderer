@@ -1445,17 +1445,7 @@ void VulkanEngine::initGround()
 	MeshAsset meshAsset{};
 
 	std::array<Vertex, 4> vertices{};
-	glm::vec4 color{ 0.07f,0.15f,0.09f,1.0f };
-	
-	vertices[0] = { glm::vec3(30, -2, 30), 1, glm::vec3(0, 1, 0), 1, color };
-	vertices[1] = { glm::vec3(-30,-2,30), 0, glm::vec3(0,1,0), 1, color };
-	vertices[2] = { glm::vec3(30,-2,-30), 1, glm::vec3(0,1,0), 0, color };
-	vertices[3] = { glm::vec3(-30,-2,-30), 0, glm::vec3(0,1,0), 0, color };
-	
-	std::vector<uint32_t> indices{
-		0,3,1,
-		0,2,3
-	};
+	glm::vec4 color{ 0.14f,0.32f,0.08f,1.0f };
 
 	//
 	uint32_t numVerticesPerSide = (RENDER_DISTANCE * 2 + 2);
@@ -1470,7 +1460,6 @@ void VulkanEngine::initGround()
 
 	std::vector<GeoSurface> surfaces;
 	surfaces.resize(1);
-	surfaces[0].count = static_cast<uint32_t>(indices.size());
 	surfaces[0].startIndex = static_cast<uint32_t>(0);
 	surfaces[0].count = static_cast<uint32_t>(indexBufferSize);
 
@@ -1640,24 +1629,14 @@ void VulkanEngine::initGround()
 		vkDestroyPipelineLayout(_device, computeIndexPipelineLayout, nullptr);
 		vkDestroyPipeline(_device, computeIndexPipeline, nullptr);
 	}
-
-
-
-
-
-
-	//meshBuffers.indexBuffer = indexBuffer;
-	//meshBuffers.vertexBuffer = vertexBuffer;
-	//meshBuffers.vertexBufferAddress = vertexBufferAddress;
-
 	//TODO OPTIMIZATION make the vertices and indices in same buffer with offset to improve performance
 	meshAsset.name = "ground";
 	meshAsset.surfaces = surfaces;
 	//meshAsset.meshBuffers = uploadMesh(indices,vertices);
 	meshAsset.meshBuffers = meshBuffers;
 
-
 	_groundMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
 
 
 	//vkDestroyShaderModule(_device, vertexComputeShader, nullptr);
@@ -1681,19 +1660,20 @@ void VulkanEngine::initGrass()
 	MeshAsset meshAsset{};
 
 	std::array<Vertex, 9> vertices{};
-	glm::vec4 color{ 0.07f,0.23f,0.09f,1.0f };
+	glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
+	glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
 	glm::vec3 normal(0, 0, -1);
 	float grassWidth = 0.03f;
 
-	vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, color * 1.2f };
-	vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, color * 1.3f };
-	vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, color * 1.4f };
-	vertices[3] = { glm::vec3(-grassWidth,0.3f, 0), 0, normal, 1, color * 1.5f };
-	vertices[4] = { glm::vec3(grassWidth, 0.6f, 0), 1, normal, 1, color * 1.6f };
-	vertices[5] = { glm::vec3(-grassWidth,0.6f, 0), 0, normal, 1, color * 1.7f };
-	vertices[6] = { glm::vec3(grassWidth, 0.9f, 0), 1, normal, 1, color * 1.8f };
-	vertices[7] = { glm::vec3(-grassWidth,0.9f, 0), 0, normal, 1, color * 1.9f };
-	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, color*2.f };
+	vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f)};
+	vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+	vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
+	vertices[3] = { glm::vec3(-grassWidth,0.3f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
+	vertices[4] = { glm::vec3(grassWidth, 0.6f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
+	vertices[5] = { glm::vec3(-grassWidth,0.6f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
+	vertices[6] = { glm::vec3(grassWidth, 0.9f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
+	vertices[7] = { glm::vec3(-grassWidth,0.9f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
+	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
 
 	std::vector<uint32_t> indices{
 		0,3,1,
@@ -2298,4 +2278,35 @@ void VulkanEngine::initWindMap()
 
 		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
 	}
+}
+
+void VulkanEngine::initSkybox()
+{
+
+	const glm::vec3 vertices[] = {
+		glm::vec3(-1.f, -1.f, -1.f),
+		glm::vec3(1.f, -1.f, -1.f),
+		glm::vec3(-1.f, 1.f, -1.f),
+		glm::vec3(1.f, 1.f, -1.f),
+		glm::vec3(-1.f, -1.f, 1.f),
+		glm::vec3(1.f, -1.f, 1.f),
+		glm::vec3(-1.f, 1.f, 1.f),
+		glm::vec3(1.f, 1.f, 1.f)
+	};
+	const int indices[] = {
+		0,1,2,
+		1,3,2,
+		0,5,1,
+		0,4,5,
+		0,2,4,
+		2,6,4,
+		5,7,3,
+		5,3,1,
+		4,6,7,
+		4,7,5,
+		2,3,6,
+		3,7,6
+	};
+
+
 }
