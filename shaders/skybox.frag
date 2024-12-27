@@ -65,7 +65,7 @@ void main() {
 	vec3 bottomColor = mix(bottomColorNight,bottomColorDay,max(0,normalizedSunPos.y));
 
 	//vec3 sunColor = vec3(0.961, 0.8, 0.635);
-	vec3 sunColor = mix(vec3(1, 0.592, 0),vec3(0.961, 0.8, 0.635),abs(normalizedSunPos.y)+0.1);
+	vec3 sunColor = mix(vec3(1, 0.592, 0),vec3(0.961, 0.8, 0.635),pow(abs(normalizedSunPos.y),2)+0.3);
 
 	vec3 normalizedPos = normalize(inPosition);
 	float normalizedHeight = (normalizedPos.y+1)*0.5;

@@ -14,10 +14,9 @@ layout (location = 0) out vec4 outFragColor;
 void main() {
     vec2 uv = inPosition.xz;
 
-    //float n = noise(uv*16 +vec2(sceneData.time));
-    float n = cnoise(vec3(uv*0.16+vec2(sceneData.time),sceneData.time));
+    float n = fbm(uv*0.05 +vec2(sceneData.time),5,1.0,0.1,1.0,0.4);
+    //float n = fbm(uv*0.16 +vec2(sceneData.time),5,);
+    //float n = cnoise(vec3(uv*0.16+vec2(sceneData.time),1));
     
-    float opacity = 4*(0.25-dot((uv-vec2(0.5,0.5)) * (uv-vec2(0.5,0.5)),vec2(1,1)));
-    //opacity *= clamp(sunHeight*5,0.2,1.0);
 	outFragColor = vec4(1) * vec4(1,1,1,n);
 }

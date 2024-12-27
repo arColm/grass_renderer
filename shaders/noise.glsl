@@ -22,8 +22,14 @@ float noise (in vec2 st) {
 
     // Cubic Hermine Curve.  Same as SmoothStep()
     vec2 u = f*f*(3.0-2.0*f);
+    //vec2 u = f*f*f*(10.0-f*(15.0-6.0*f));
     // u = smoothstep(0.,1.,f);
+    // Interpolate along the x-axis for both rows of corners
+    float x1 = mix(a, b, u.x);
+    float x2 = mix(c, d, u.x);
 
+    // Then, interpolate along the y-axis
+    return mix(x1, x2, u.y);
     // Mix 4 coorners percentages
     return mix(a, b, u.x) +
             (c - a)* u.y * (1.0 - u.x) +
@@ -40,6 +46,24 @@ float noise2(vec2 p){
 		mix(random(ip+vec2(0.0,1.0)),random(ip+vec2(1.0,1.0)),u.x),u.y);
 	return res*res;
 }
+
+vec2 hash( vec2 p ) {
+	p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+	return -1.0 + 2.0*fract(sin(p)*43758.5453123);
+}
+
+float rnoise( in vec2 p ) {
+    const float K1 = 0.366025404; // (sqrt(3)-1)/2;
+    const float K2 = 0.211324865; // (3-sqrt(3))/6;
+	vec2 i = floor(p + (p.x+p.y)*K1);	
+    vec2 a = p - i + (i.x+i.y)*K2;
+    vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0); //vec2 of = 0.5 + 0.5*vec2(sign(a.x-a.y), sign(a.y-a.x));
+    vec2 b = a - o + K2;
+	vec2 c = a - 1.0 + 2.0*K2;
+    vec3 h = max(0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );
+	vec3 n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
+    return dot(n, vec3(70.0));	
+}
 float layeredNoise(vec2 p, int octaves, float initialPersistence) {
     float n = 0;
     float amplitude = 1.0;
@@ -48,12 +72,24 @@ float layeredNoise(vec2 p, int octaves, float initialPersistence) {
 
     for(int i=0;i<octaves;i++) {
         maxAmplitude += amplitude;
-        n+= noise(p*persistence) * amplitude;
+        n+= rnoise(p*persistence) * amplitude;
         //amplitude *= 0.3;
-        amplitude *= 0.2;
-        persistence *= 2;
+        amplitude *= 0.3;
+        persistence *= 1.5;
     }
     return n /maxAmplitude;
+}
+
+
+float fbm(vec2 n,int octaves) {
+    const mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+	float total = 0.0, amplitude = 0.1;
+	for (int i = 0; i < octaves; i++) {
+		total += rnoise(n) * amplitude;
+		n = m * n;
+		amplitude *= 0.4;
+	}
+	return total;
 }
 
 
@@ -65,7 +101,7 @@ float layeredNoise(vec2 p, int octaves, float initialFrequency, float lacunarity
 
     for(int i=0;i<octaves;i++) {
         maxAmplitude += amplitude;
-        n+= noise(p*frequency) * amplitude;
+        n+= rnoise(p*frequency) * amplitude;
         //amplitude *= 0.3;
         amplitude *= persistence;
         frequency *= lacunarity;
@@ -73,6 +109,39 @@ float layeredNoise(vec2 p, int octaves, float initialFrequency, float lacunarity
     return n /maxAmplitude;
 }
 
+float layeredNoise(vec2 p, int octaves, float initialFrequency, float initialAmplitude, float lacunarity, float persistence) {
+    float n = 0;
+    float amplitude = initialAmplitude;
+    float frequency = initialFrequency; //1.0
+    float maxAmplitude = 0.0;
+
+    for(int i=0;i<octaves;i++) {
+        maxAmplitude += amplitude;
+        n+= rnoise(p*frequency) * amplitude;
+        //amplitude *= 0.3;
+        amplitude *= persistence;
+        frequency *= lacunarity;
+    }
+    return n /maxAmplitude;
+}
+
+float fbm(vec2 p, int octaves, float initialFrequency, float initialAmplitude, float lacunarity, float persistence) {
+    const mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+    float n = 0;
+    float amplitude = initialAmplitude;
+    float frequency = initialFrequency; //1.0
+    float maxAmplitude = 0.0;
+
+    for(int i=0;i<octaves;i++) {
+        maxAmplitude += amplitude;
+        n+= rnoise(p*frequency) * amplitude;
+        p = m*p;
+        //amplitude *= 0.3;
+        amplitude *= persistence;
+        frequency *= lacunarity;
+    }
+    return n /maxAmplitude;
+}
 
 //	Classic Perlin 3D Noise 
 //	by Stefan Gustavson (https://github.com/stegu/webgl-noise)

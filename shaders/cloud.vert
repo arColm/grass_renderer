@@ -25,7 +25,7 @@ void main() {
 	vec3 v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 	vec4 position = vec4(v, 1.0f);
 
-	gl_Position = sceneData.viewProj*(position);
+	gl_Position = sceneData.viewProj*(position+PushConstants.playerPosition);
 	//gl_Position = sceneData.viewProj * position;
 
 	outPosition = position.xyz;
