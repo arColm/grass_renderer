@@ -2496,10 +2496,10 @@ void VulkanEngine::initClouds()
 	MeshAsset meshAsset{};
 
 	const std::vector<glm::vec4> vertices{
-		glm::vec4(-RENDER_DISTANCE/2, 50.9f, -RENDER_DISTANCE / 2,1.0f),
-		glm::vec4(RENDER_DISTANCE / 2, 50.9f, -RENDER_DISTANCE / 2,1.0f),
-		glm::vec4(-RENDER_DISTANCE / 2, 50.9f, RENDER_DISTANCE / 2,1.0f),
-		glm::vec4(RENDER_DISTANCE / 2, 50.9f, RENDER_DISTANCE / 2,1.0f)
+		glm::vec4(-RENDER_DISTANCE, 50.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 50.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(-RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f)
 	};
 	const std::vector<uint32_t> indices({
 		0,1,2,

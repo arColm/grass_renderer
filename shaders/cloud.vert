@@ -6,6 +6,7 @@
 #include "0_scene_data.glsl"
 
 layout (location = 0) out vec3 outPosition;
+layout (location = 1) out vec3 outPlayerPos;
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	vec3 vertices[];
@@ -29,4 +30,5 @@ void main() {
 	//gl_Position = sceneData.viewProj * position;
 
 	outPosition = position.xyz;
+	outPlayerPos = PushConstants.playerPosition.xyz;
 }

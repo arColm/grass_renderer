@@ -8,15 +8,29 @@
 float PI = 3.1415926;
 
 layout (location = 0) in vec3 inPosition;
+layout (location = 1) in vec3 inPlayerPos;
 
 layout (location = 0) out vec4 outFragColor;
 
-void main() {
-    vec2 uv = inPosition.xz;
+// inspired by https://www.shadertoy.com/view/4tdSWr
 
-    float n = fbm(uv*0.05 +vec2(sceneData.time),5,1.0,0.1,1.0,0.4);
-    //float n = fbm(uv*0.16 +vec2(sceneData.time),5,);
-    //float n = cnoise(vec3(uv*0.16+vec2(sceneData.time),1));
+void main() {
+    vec2 uv = inPosition.xz * 0.02 +vec2(sceneData.time.x)*0.2;
+
+    float n = fbm(uv+sceneData.time.y,5,1.0,0.4,1.0,0.6);
+    float m= fbm(uv,6,1.0,0.4,1.0,0.6);
+    float p = fbm(uv*0.6+sceneData.time.y,4,1.0,0.6,1.0,0.6);
+    float q = fbm(uv*4,7,1.0,0.4,1.0,0.4);
+    n += abs(p);
+    m+= abs(q);
+
+
+    float opacity = mix(0,n,clamp(n+m,0,1));
     
-	outFragColor = vec4(1) * vec4(1,1,1,n);
+    opacity = mix(0,opacity,3*(gl_FragCoord.z*0.1));
+
+
+
+
+	outFragColor = vec4(1,1,1,opacity);
 }
