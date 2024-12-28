@@ -30,7 +30,7 @@ float ShadowCalculation(vec4 fragPosLightSpace) {
 		for(int y=-1;y<=1;y++)
 		{
 			float closestDepth = texture(shadowMap,projCoords.xy+vec2(x,y)*texelSize).r;
-			shadow += currentDepth  - bias > closestDepth ? 0.8 : 0.0;
+			shadow += currentDepth  - bias > closestDepth ? 0.4 : 0.0;
 		}
 	}
 	shadow/=9.0;
@@ -46,7 +46,7 @@ void main() {
 	
 	vec3 color = inColor;// * texture(colorTex,inUV).xyz;
 
-	float diffuseLight = max(dot(inNormal, -sceneData.sunlightDirection.xyz),0.3f);
+	float diffuseLight = max(dot(inNormal, normalize(-sceneData.sunlightDirection.xyz)),0.3f);
 	vec3 ambientLight = vec3(0.1);//sceneData.ambientColor.xyz;
 	vec3 specularLight = vec3(1)*pow(max(dot(inNormal, halfwayDir), 0.0), 16);
 	
