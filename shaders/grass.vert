@@ -56,8 +56,11 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	return matrix;
 }
 
-float getWindStrength(uint vertexIndex) {
-	return clamp(0.1 * (vertexIndex*vertexIndex/9),0,1);
+//float getWindStrength(uint vertexIndex) {
+//	return clamp(0.1 * (vertexIndex*vertexIndex/9),0,1);
+//}
+float getWindStrength(float height) {
+	return clamp(height*height,0,2);
 }
 
 vec3 getWindDirection(vec3 grassBladePosition) {
@@ -109,7 +112,7 @@ void main() {
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
 	vec3 position = relativePosition + grassBladePosition;
 
-	vec3 windOffset = (windDirection * getWindStrength(gl_VertexIndex));
+	vec3 windOffset = (windDirection * getWindStrength(v.position.y));
 	windOffset.y += -length(windOffset)*0.5;
 	position+= windOffset;
 	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;

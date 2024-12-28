@@ -19,7 +19,7 @@ void main() {
 
     float n = fbm(uv+sceneData.time.y,5,1.0,0.4,1.0,0.6);
     float m= fbm(uv,6,1.0,0.4,1.0,0.6);
-    float p = fbm(uv*0.6+sceneData.time.y,4,1.0,0.6,1.0,0.6);
+    float p = fbm(uv*0.6+sceneData.time.y*0.2,4,1.0,0.6,1.0,0.6);
     float q = fbm(uv*4,7,1.0,0.4,1.0,0.4);
     n += abs(p);
     m+= abs(q);
