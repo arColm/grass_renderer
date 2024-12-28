@@ -479,9 +479,9 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 3, sets, 0, nullptr);
 	vkCmdPushConstants(cmd, _shadowGrassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(cmd, _lowQualityGrassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
+	vkCmdDrawIndexed(cmd, _lowQualityGrassMesh->surfaces[0].count, _grassCount, _lowQualityGrassMesh->surfaces[0].startIndex, 0, 0);
 
 
 	vkCmdEndRendering(cmd);
@@ -1691,61 +1691,99 @@ void VulkanEngine::initGround()
 
 void VulkanEngine::initGrass()
 {
-	MeshAsset meshAsset{};
+	{
+		MeshAsset meshAsset{};
 
-	glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
-	glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
-	glm::vec3 normal(0, 0, -1);
-	float grassWidth = 0.03f;
+		glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
+		glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
+		glm::vec3 normal(0, 0, -1);
+		float grassWidth = 0.03f;
 
-	std::array<Vertex, 9> vertices{};
-	vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f)};
-	vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
-	vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
-	vertices[3] = { glm::vec3(-grassWidth,0.3f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
-	vertices[4] = { glm::vec3(grassWidth, 0.6f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
-	vertices[5] = { glm::vec3(-grassWidth,0.6f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
-	vertices[6] = { glm::vec3(grassWidth, 0.9f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
-	vertices[7] = { glm::vec3(-grassWidth,0.9f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
-	vertices[8] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
+		std::array<Vertex, 9> vertices{};
+		vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
+		vertices[3] = { glm::vec3(-grassWidth,0.3f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
+		vertices[4] = { glm::vec3(grassWidth, 0.6f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
+		vertices[5] = { glm::vec3(-grassWidth,0.6f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.6f) };
+		vertices[6] = { glm::vec3(grassWidth, 0.9f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
+		vertices[7] = { glm::vec3(-grassWidth,0.9f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,0.9f) };
+		vertices[8] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
 
-	std::vector<uint32_t> indices{
-		0,3,1,
-		0,2,3,
-		2,5,3,
-		2,4,5,
-		4,7,5,
-		4,6,7,
-		6,8,7
-	};
+		std::vector<uint32_t> indices{
+			0,3,1,
+			0,2,3,
+			2,5,3,
+			2,4,5,
+			4,7,5,
+			4,6,7,
+			6,8,7
+		};
 
-	//std::array<Vertex, 3> vertices{};
-	//vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f) };
-	//vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
-	//vertices[2] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
-	//std::vector<uint32_t> indices{
-	//	0,1,2
-	//};
+		//std::array<Vertex, 3> vertices{};
+		//vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		//vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		//vertices[2] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
+		//std::vector<uint32_t> indices{
+		//	0,1,2
+		//};
 
-	std::vector<GeoSurface> surfaces;
-	surfaces.resize(1);
-	surfaces[0].count = static_cast<uint32_t>(indices.size());
-	surfaces[0].startIndex = static_cast<uint32_t>(0);
-
-
-	meshAsset.name = "grass";
-	meshAsset.surfaces = surfaces;
-	meshAsset.meshBuffers = uploadMesh(indices, vertices);
+		std::vector<GeoSurface> surfaces;
+		surfaces.resize(1);
+		surfaces[0].count = static_cast<uint32_t>(indices.size());
+		surfaces[0].startIndex = static_cast<uint32_t>(0);
 
 
-	_grassMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+		meshAsset.name = "grass";
+		meshAsset.surfaces = surfaces;
+		meshAsset.meshBuffers = uploadMesh(indices, vertices);
 
-	_mainDeletionQueue.pushFunction(
-		[&]() {
-			destroyBuffer(_grassMesh->meshBuffers.vertexBuffer);
-			destroyBuffer(_grassMesh->meshBuffers.indexBuffer);
-		}
-	);
+
+		_grassMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+		_mainDeletionQueue.pushFunction(
+			[&]() {
+				destroyBuffer(_grassMesh->meshBuffers.vertexBuffer);
+				destroyBuffer(_grassMesh->meshBuffers.indexBuffer);
+			}
+		);
+	}
+	{
+		MeshAsset meshAsset{};
+
+		glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
+		glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
+		glm::vec3 normal(0, 0, -1);
+		float grassWidth = 0.03f;
+
+		std::array<Vertex, 3> vertices{};
+		vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+		vertices[2] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
+		std::vector<uint32_t> indices{
+			0,1,2
+		};
+
+		std::vector<GeoSurface> surfaces;
+		surfaces.resize(1);
+		surfaces[0].count = static_cast<uint32_t>(indices.size());
+		surfaces[0].startIndex = static_cast<uint32_t>(0);
+
+
+		meshAsset.name = "low quality grass";
+		meshAsset.surfaces = surfaces;
+		meshAsset.meshBuffers = uploadMesh(indices, vertices);
+
+
+		_lowQualityGrassMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
+
+		_mainDeletionQueue.pushFunction(
+			[&]() {
+				destroyBuffer(_lowQualityGrassMesh->meshBuffers.vertexBuffer);
+				destroyBuffer(_lowQualityGrassMesh->meshBuffers.indexBuffer);
+			}
+		);
+	}
 
 	//grass data buffers
 	//for (int i = 0; i < FRAME_OVERLAP; i++)

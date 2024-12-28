@@ -39,9 +39,7 @@ layout( push_constant ) uniform constants
 
 } PushConstants;
 
-float random(vec2 co){
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
-}
+#include "noise.glsl"
 
 mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	mat3 matrix;
@@ -64,20 +62,21 @@ float getWindStrength(float height) {
 }
 
 vec3 getWindDirection(vec3 grassBladePosition) {
+	//return imageLoad(WindMap,imageSize(WindMap)/2+ivec2(grassBladePosition.x,grassBladePosition.z)).xyz;
     vec3 i = floor(grassBladePosition);
     vec3 f = fract(grassBladePosition);
-
+	ivec2 mapCenter = imageSize(WindMap)/2;
     // Four corners in 2D of a tile
-    vec3 a = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))).xyz;
-    vec3 b = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(1,0)).xyz;
-    vec3 c = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(0,1)).xyz;
-    vec3 d = imageLoad(WindMap,ivec2(abs(i.x),abs(i.z))+ivec2(1,1)).xyz;
+    vec3 a = imageLoad(WindMap,mapCenter+ivec2(i.x,i.z)).xyz;
+    vec3 b = imageLoad(WindMap,mapCenter+ivec2(i.x,i.z)+ivec2(1,0)).xyz;
+    vec3 c = imageLoad(WindMap,mapCenter+ivec2(i.x,i.z)+ivec2(0,1)).xyz;
+    vec3 d = imageLoad(WindMap,mapCenter+ivec2(i.x,i.z)+ivec2(1,1)).xyz;
 
     // Smooth Interpolation
 
     // Cubic Hermine Curve.  Same as SmoothStep()
-    //vec3 u = f*f*(3.0-2.0*f);
-    vec3 u = mix(vec3(0.),vec3(1.),f);
+    vec3 u = f*f*(3.0-2.0*f);
+    //vec3 u = mix(vec3(0.),vec3(1.),f);
 
     // Mix 4 coorners percentages
     return mix(a, b, u.x) +
@@ -128,7 +127,8 @@ void main() {
 		0)).xyz);
 	//outNormal = normalize(rotationTowardsPlayer*normalize(v.normal + vec3(random(grassBladePosition.xz))));
 
-	outColor = v.color.xyz;// * materialData.colorFactors.xyz;
+	//outColor = v.color.xyz;// * materialData.colorFactors.xyz;
+	outColor = mix(v.color.xyz*0.8,v.color.xyz*1.2,(clamp(rnoise(position.xz*0.02),0,1)));
 	//outColor = abs(outNormal);
 	//outColor = windDirection;
 	outUV.x = v.uv_x;

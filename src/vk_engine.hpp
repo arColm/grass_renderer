@@ -155,9 +155,9 @@ public:
 	//grass
 	bool _settingsChanged = true;
 	int _grassCount = 0;
-	int _maxGrassDistance = 55;
+	int _maxGrassDistance = 100;
 	int _grassDensity = 6;
-	int UI_maxGrassDistance = 55;
+	int UI_maxGrassDistance = 100;
 	int UI_grassDensity = 6;
 	VkPipelineLayout _grassPipelineLayout;
 	VkPipeline _grassPipeline;
@@ -167,6 +167,7 @@ public:
 	VkDescriptorSet _grassDataDescriptorSet;
 	AllocatedBuffer _grassDataBuffer;
 	std::shared_ptr<MeshAsset> _grassMesh;
+	std::shared_ptr<MeshAsset> _lowQualityGrassMesh;
 
 	//terrain
 	static const int RENDER_DISTANCE;
