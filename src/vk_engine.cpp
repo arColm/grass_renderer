@@ -28,7 +28,7 @@
 
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
 const int VulkanEngine::SHADOWMAP_RESOLUTION = 8192;
-const int VulkanEngine::RENDER_DISTANCE = 300;
+const int VulkanEngine::RENDER_DISTANCE = 600;
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -77,6 +77,8 @@ void VulkanEngine::cleanup()
 	{
 		vkDeviceWaitIdle(_device);
 
+		destroyBuffer(_grassDataBuffer);
+
 		for (int i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(_device, _frames[i].commandPool, nullptr);
@@ -115,6 +117,7 @@ void VulkanEngine::cleanup()
 void VulkanEngine::draw()
 {
 	static const uint64_t timeout = 1000000000;
+	UI_triangleCount = 0;
 
 	//wait until gpu has finished rendering the last frame, timeout of 1 second
 	VK_CHECK(vkWaitForFences(_device, 1, &getCurrentFrame().renderFence, true, timeout));
@@ -318,7 +321,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd,_skyboxPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _skyboxMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _skyboxMesh->surfaces[0].count, 1, _skyboxMesh->surfaces[0].startIndex, 0, 0);
-
+	UI_triangleCount += _skyboxMesh->surfaces[0].count / 3 * 1;
 	//draw clouds
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
@@ -326,6 +329,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _cloudMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _cloudMesh->surfaces[0].count, 1, _cloudMesh->surfaces[0].startIndex, 0, 0);
+	UI_triangleCount += _cloudMesh->surfaces[0].count / 3 * 1;
 
 	//draw mesh
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
@@ -345,6 +349,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+	UI_triangleCount += testMeshes[2]->surfaces[0].count / 3 * 1;
 
 
 	//draw ground
@@ -352,7 +357,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
-
+	UI_triangleCount += _groundMesh->surfaces[0].count / 3 * 1;
 
 	//draw grass
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
@@ -370,6 +375,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _grassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
+	UI_triangleCount += _grassMesh->surfaces[0].count / 3 * _grassCount;
 
 
 	vkCmdEndRendering(cmd);
@@ -483,31 +489,28 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 
 void VulkanEngine::updateGrassData(VkCommandBuffer cmd)
 {
-	_settingsChanged = false;
-	int newGrassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);
-	AllocatedBuffer grassDataBuffer;
-	if (true)
+	if (_settingsChanged)
 	{
-		//TODO only allocate new buffer when grass count changes
-		_grassCount = newGrassCount;
-		grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-
+		AllocatedBuffer deletedBuffer = _grassDataBuffer;
 		//deletion
 		getCurrentFrame().deletionQueue.pushFunction(
 			[=, this]() {
-				destroyBuffer(grassDataBuffer);
+				destroyBuffer(deletedBuffer);
 			}
 		);
-	}
-	else
-	{
-		grassDataBuffer = _grassDataBuffer;
+		_settingsChanged = false;
+		_grassDensity = UI_grassDensity;
+		_maxGrassDistance = UI_maxGrassDistance;
+		//TODO only allocate new buffer when grass count changes
+		_grassCount = (_maxGrassDistance * 2 * _grassDensity + 1) * (_maxGrassDistance * 2 * _grassDensity + 1);;
+		_grassDataBuffer = createBuffer(sizeof(GrassData) * _grassCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
 	}
 	//TODO mayb we should just create a buffer every frame and fill it instead of storing in FrameData hmmm
 	//		then we dont have to update the framedata buffer AND this buffer when _grassCount changes.
 	_grassDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _grassDataDescriptorLayout, nullptr);
 	DescriptorWriter writer;
-	writer.writeBuffer(0, grassDataBuffer.buffer, sizeof(GrassData) * _grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.writeBuffer(0, _grassDataBuffer.buffer, sizeof(GrassData) * _grassCount, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	writer.writeImage(1, _windMapImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.updateSet(_device, _grassDataDescriptorSet);
 
@@ -529,7 +532,7 @@ void VulkanEngine::updateGrassData(VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil((float)(_grassCount) / 64.0),
 		1, 1);
 
-	vkutil::bufferBarrier(cmd, grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
+	vkutil::bufferBarrier(cmd, _grassDataBuffer.buffer, VK_WHOLE_SIZE, 0,
 		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
 		VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT_KHR);
 }
@@ -586,9 +589,10 @@ void VulkanEngine::run()
 
 		if (ImGui::Begin("grass"))
 		{
-			ImGui::SliderInt("density", &_grassDensity, 1, 100);
-			ImGui::SliderInt("distance", &_maxGrassDistance, 1, 100);
+			ImGui::SliderInt("density", &UI_grassDensity, 1, 100);
+			ImGui::SliderInt("distance", &UI_maxGrassDistance, 1, 100);
 			ImGui::Text("grassCount: %d", _grassCount);
+			ImGui::Text("tris: %d", UI_triangleCount);
 
 			if (ImGui::Button("Apply Changes"))
 				_settingsChanged = true;
@@ -605,7 +609,7 @@ void VulkanEngine::run()
 			ImGui::End();
 		}
 
-		if (false && ImGui::Begin("wind map"))
+		if (ImGui::Begin("wind map"))
 		{
 			ImGui::Image((ImTextureID)_windMapSamplerDescriptorSet, ImVec2(600,600));
 			ImGui::End();
@@ -741,15 +745,15 @@ void VulkanEngine::updateScene(float deltaTime)
 	{
 		_sceneData.sunlightDirection = glm::rotate(_time * 0.3f, glm::vec3(1, 0, 0)) * glm::vec4(1, 1, 0, 1);
 		_sceneData.sunlightDirection.w = -_sceneData.sunlightDirection.y;
-
-
-		_sunPosition = glm::vec3(-20 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
-			-20 * _sceneData.sunlightDirection.y,
-			-20 * _sceneData.sunlightDirection.z + std::floor(_player._position.z));
 	}
 
+
+
+	_sunPosition = glm::vec3(-50 * _sceneData.sunlightDirection.x + _player._position.x,
+		-50 * _sceneData.sunlightDirection.y,
+		-50 * _sceneData.sunlightDirection.z + _player._position.z);
 	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
-		glm::vec3(std::floor(_player._position.x),2, std::floor(_player._position.z)), glm::vec3(0, 1, 0));
+		glm::vec3(_player._position.x,2, _player._position.z), glm::vec3(0, 1, 0));
 	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
 	_sceneData.sunViewProj = _shadowMapSceneData.viewProj;
 	_sceneData.time = glm::vec4(_time, _time / 2, 0, 0);
@@ -1689,12 +1693,12 @@ void VulkanEngine::initGrass()
 {
 	MeshAsset meshAsset{};
 
-	std::array<Vertex, 9> vertices{};
 	glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
 	glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
 	glm::vec3 normal(0, 0, -1);
 	float grassWidth = 0.03f;
 
+	std::array<Vertex, 9> vertices{};
 	vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f)};
 	vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
 	vertices[2] = { glm::vec3(grassWidth, 0.3f, 0), 1, normal, 1, glm::mix(bottomColor,topColor,0.3f) };
@@ -1714,6 +1718,14 @@ void VulkanEngine::initGrass()
 		4,6,7,
 		6,8,7
 	};
+
+	//std::array<Vertex, 3> vertices{};
+	//vertices[0] = { glm::vec3(grassWidth, 0,0), 1, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+	//vertices[1] = { glm::vec3(-grassWidth,0,0), 0, normal, 1, glm::mix(bottomColor,topColor,0.f) };
+	//vertices[2] = { glm::vec3(0, 1.1f, 0), 0, normal, 1, glm::mix(bottomColor,topColor,1.f) };
+	//std::vector<uint32_t> indices{
+	//	0,1,2
+	//};
 
 	std::vector<GeoSurface> surfaces;
 	surfaces.resize(1);

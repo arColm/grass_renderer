@@ -147,14 +147,18 @@ public:
 	bool _isSunMoving = true;
 
 	EngineStats _engineStats;
+	int UI_triangleCount;
+
 	std::shared_ptr<MeshAsset> _groundMesh;
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>> _meshAssets;
 
 	//grass
 	bool _settingsChanged = true;
 	int _grassCount = 0;
-	int _maxGrassDistance = 5;
-	int _grassDensity = 1;
+	int _maxGrassDistance = 55;
+	int _grassDensity = 6;
+	int UI_maxGrassDistance = 55;
+	int UI_grassDensity = 6;
 	VkPipelineLayout _grassPipelineLayout;
 	VkPipeline _grassPipeline;
 	VkPipelineLayout _grassComputePipelineLayout;
