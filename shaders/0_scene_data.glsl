@@ -9,6 +9,6 @@ layout (set = 0, binding = 0) uniform SceneData {
 	vec4 ambientColor;
 	vec4 sunlightDirection; //w for sunlight strength
 	vec4 sunlightColor;
-    mat4 sunViewProj;
+    mat4 sunViewProj[3];
 	vec4 time; //.x = time, .y = time/2
 } sceneData;

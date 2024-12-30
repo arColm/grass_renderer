@@ -27,8 +27,9 @@
 #include "vk_buffers.hpp"
 
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
-const int VulkanEngine::SHADOWMAP_RESOLUTION = 8192;
+const int VulkanEngine::SHADOWMAP_RESOLUTION = 2048;
 const int VulkanEngine::RENDER_DISTANCE = 600;
+const float VulkanEngine::CSM_SCALE = 3.f;
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -152,10 +153,9 @@ void VulkanEngine::draw()
 	updateGrassData(cmd);
 
 	//calculate shadow map
-	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _shadowMapImageArray.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	drawShadowMap(cmd);
-	vkutil::transitionImage(cmd, _shadowMapImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
-
+	vkutil::transitionImage(cmd, _shadowMapImageArray.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
 		
 
 	//make the draw image into writable mode before rendering
@@ -268,20 +268,22 @@ void VulkanEngine::drawImGui(VkCommandBuffer cmd, VkImageView targetImageView)
 void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 {
 	//PER FRAME DATA
-	//	Scene Data
-	AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-	getCurrentFrame().deletionQueue.pushFunction(
-		[=, this]() {
-			destroyBuffer(sceneDataBuffer);
-		}
-	);
-	SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
-	*sceneUniformData = _sceneData; //write scene data to buffer
-
 	VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
-	DescriptorWriter writer;
-	writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.updateSet(_device, sceneDataDescriptorSet);
+	{
+		//	Scene Data
+		AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		getCurrentFrame().deletionQueue.pushFunction(
+			[=, this]() {
+				destroyBuffer(sceneDataBuffer);
+			}
+		);
+		SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
+		*sceneUniformData = _sceneData; //write scene data to buffer
+
+		DescriptorWriter writer;
+		writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		writer.updateSet(_device, sceneDataDescriptorSet);
+	}
 	
 	//begin a render pass connected to draw image
 	//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
@@ -383,108 +385,111 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 {
-	//IDK if theres a better way to do this (there probably is) but for now
-	// everything is just copypasted from drawGeometry
-	//PER FRAME DATA
-	//	Scene Data
-	AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-	getCurrentFrame().deletionQueue.pushFunction(
-		[=, this]() {
-			destroyBuffer(sceneDataBuffer);
-		}
-	);
-	SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
-	*sceneUniformData = _shadowMapSceneData; //write scene data to buffer
-
-	VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
-	DescriptorWriter writer;
-	writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.updateSet(_device, sceneDataDescriptorSet);
-
-	//begin a render pass connected to draw image
-	//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
-	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_shadowMapImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-	VkRenderingInfo renderingInfo{};
-	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-	renderingInfo.pNext = nullptr;
-
-	renderingInfo.renderArea = VkRect2D{ VkOffset2D{0,0}, VkExtent2D(_shadowMapImage.imageExtent.width,_shadowMapImage.imageExtent.height)};
-	renderingInfo.layerCount = 1;
-	renderingInfo.colorAttachmentCount = 0;
-	renderingInfo.pDepthAttachment = &depthAttachment;
-	renderingInfo.pStencilAttachment = nullptr;
-	vkCmdBeginRendering(cmd, &renderingInfo);
-
-	//set dynamic viewport and scissor
-	VkViewport viewport{};
-	viewport.x = 0;
-	viewport.y = 0;
-	viewport.width = _shadowMapImage.imageExtent.width;
-	viewport.height = _shadowMapImage.imageExtent.height;
-	viewport.minDepth = 0.f;
-	viewport.maxDepth = 1.f;
-
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.extent.width = _shadowMapImage.imageExtent.width;
-	scissor.extent.height = _shadowMapImage.imageExtent.height;
-	scissor.offset.x = 0;
-	scissor.offset.y = 0;
-
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-	//draw mesh
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipeline);
-
-	GPUDrawPushConstants pushConstants{};
-	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
-	pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
-	//pushConstants.playerPosition = glm::vec4(_sunPosition.x, _sunPosition.y, _sunPosition.z, 0);
-
-	//draw loaded test mesh
-	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
-
+	for (int i = 0; i < CSM_COUNT; i++)
 	{
+		//IDK if theres a better way to do this (there probably is) but for now
+		// everything is just copypasted from drawGeometry
+		//PER FRAME DATA
+		//	Scene Data
+		AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		getCurrentFrame().deletionQueue.pushFunction(
+			[=, this]() {
+				destroyBuffer(sceneDataBuffer);
+			}
+		);
+		SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
+		*sceneUniformData = _shadowMapSceneData[i]; //write scene data to buffer
+
+		VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
+		DescriptorWriter writer;
+		writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		writer.updateSet(_device, sceneDataDescriptorSet);
+
+		//begin a render pass connected to draw image
+		//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
+		VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_shadowMapImageArray.imageViews[i], VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+		VkRenderingInfo renderingInfo{};
+		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.pNext = nullptr;
+
+		renderingInfo.renderArea = VkRect2D{ VkOffset2D{0,0}, VkExtent2D(_shadowMapImageArray.imageExtent.width,_shadowMapImageArray.imageExtent.height)};
+		renderingInfo.layerCount = 1;
+		renderingInfo.colorAttachmentCount = 0;
+		renderingInfo.pDepthAttachment = &depthAttachment;
+		renderingInfo.pStencilAttachment = nullptr;
+		vkCmdBeginRendering(cmd, &renderingInfo);
+
+		//set dynamic viewport and scissor
+		VkViewport viewport{};
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = _shadowMapImageArray.imageExtent.width;
+		viewport.height = _shadowMapImageArray.imageExtent.height;
+		viewport.minDepth = 0.f;
+		viewport.maxDepth = 1.f;
+
+		vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.extent.width = _shadowMapImageArray.imageExtent.width;
+		scissor.extent.height = _shadowMapImageArray.imageExtent.height;
+		scissor.offset.x = 0;
+		scissor.offset.y = 0;
+
+		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		//draw mesh
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipeline);
+
+		GPUDrawPushConstants pushConstants{};
+		pushConstants.worldMatrix = glm::translate(glm::vec3(0));
+		pushConstants.playerPosition = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 0);
+		//pushConstants.playerPosition = glm::vec4(_sunPosition.x, _sunPosition.y, _sunPosition.z, 0);
+
+		//draw loaded test mesh
+		pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
+
+		{
+
+			VkDescriptorSet sets[] = {
+				sceneDataDescriptorSet,
+				_shadowMapDescriptorSet
+			};
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipelineLayout, 0, 2, sets, 0, nullptr);
+		}
+		vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+		vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+		vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+
+
+		//draw ground
+		pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
+		vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+		vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
+
+		//draw grass
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipeline);
+
+		pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
 
 		VkDescriptorSet sets[] = {
 			sceneDataDescriptorSet,
-			_shadowMapDescriptorSet
+			_shadowMapDescriptorSet,
+			_grassDataDescriptorSet
 		};
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowMeshPipelineLayout, 0, 2, sets, 0, nullptr);
+
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 3, sets, 0, nullptr);
+		vkCmdPushConstants(cmd, _shadowGrassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+		vkCmdBindIndexBuffer(cmd, _lowQualityGrassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+		vkCmdDrawIndexed(cmd, _lowQualityGrassMesh->surfaces[0].count, _grassCount, _lowQualityGrassMesh->surfaces[0].startIndex, 0, 0);
+
+
+		vkCmdEndRendering(cmd);
 	}
-	vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-	vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
-
-
-	//draw ground
-	pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
-	vkCmdPushConstants(cmd, _shadowMeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
-
-	//draw grass
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipeline);
-
-	pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
-
-	VkDescriptorSet sets[] = {
-		sceneDataDescriptorSet,
-		_shadowMapDescriptorSet,
-		_grassDataDescriptorSet
-	};
-
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowGrassPipelineLayout, 0, 3, sets, 0, nullptr);
-	vkCmdPushConstants(cmd, _shadowGrassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-	vkCmdBindIndexBuffer(cmd, _lowQualityGrassMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-	vkCmdDrawIndexed(cmd, _lowQualityGrassMesh->surfaces[0].count, _grassCount, _lowQualityGrassMesh->surfaces[0].startIndex, 0, 0);
-
-
-	vkCmdEndRendering(cmd);
 }
 
 void VulkanEngine::updateGrassData(VkCommandBuffer cmd)
@@ -752,10 +757,14 @@ void VulkanEngine::updateScene(float deltaTime)
 	_sunPosition = glm::vec3(-50 * _sceneData.sunlightDirection.x + _player._position.x,
 		-50 * _sceneData.sunlightDirection.y,
 		-50 * _sceneData.sunlightDirection.z + _player._position.z);
-	_shadowMapSceneData.view = glm::lookAt(_sunPosition,
-		glm::vec3(_player._position.x,2, _player._position.z), glm::vec3(0, 1, 0));
-	_shadowMapSceneData.viewProj = _shadowMapSceneData.proj * _shadowMapSceneData.view;
-	_sceneData.sunViewProj = _shadowMapSceneData.viewProj;
+
+	for (int i = 0; i < CSM_COUNT; i++)
+	{
+		_shadowMapSceneData[i].view = glm::lookAt(_sunPosition,
+			glm::vec3(_player._position.x, 2, _player._position.z), glm::vec3(0, 1, 0));
+		_shadowMapSceneData[i].viewProj = _shadowMapSceneData[i].proj * _shadowMapSceneData[i].view;
+		_sceneData.sunViewProj[i] = _shadowMapSceneData[i].viewProj;
+	}
 	_sceneData.time = glm::vec4(_time, _time / 2, 0, 0);
 }
 
@@ -1467,7 +1476,11 @@ void VulkanEngine::initSceneData()
 	_sceneData.sunlightDirection = glm::vec4(2, -2, 0, 1);
 	_sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
 	_sceneData.viewProj = _sceneData.proj*_sceneData.view;
-	_sceneData.sunViewProj = _sceneData.viewProj;
+
+	for (int i = 0; i < CSM_COUNT; i++)
+	{
+		_sceneData.sunViewProj[i] = _sceneData.viewProj;
+	}
 
 
 	_sunPosition = glm::vec3(-30 * _sceneData.sunlightDirection.x + std::floor(_player._position.x),
@@ -1954,28 +1967,38 @@ void VulkanEngine::initHeightMap()
 
 void VulkanEngine::initShadowMapResources()
 {
-	glm::mat4 projection =
-		glm::ortho(-(100.0), 100.0,
-			(100.0), -100.0,
-			-1050.0, 1050.0);
-			//200.0, 0.0);
-	_shadowMapSceneData.proj = projection;
 	//IMAGE
 	VkExtent3D imageExtent = {
 		SHADOWMAP_RESOLUTION,
 		SHADOWMAP_RESOLUTION,
 		1
 	};
-
 	//hardcoding depth to be same as regular depth test image
-	_shadowMapImage.imageFormat = _depthImage.imageFormat;
-	_shadowMapImage.imageExtent = imageExtent;
+	_shadowMapImageArray.imageFormat = _depthImage.imageFormat;
+	_shadowMapImageArray.imageExtent = imageExtent;
 
 	VkImageUsageFlags imageUsageFlags{};
 	imageUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_shadowMapImage.imageFormat, imageUsageFlags, imageExtent);
+	VkImageCreateInfo imgInfo{};
+	imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imgInfo.pNext = nullptr;
+
+	imgInfo.imageType = VK_IMAGE_TYPE_2D;
+
+	imgInfo.format = _shadowMapImageArray.imageFormat;
+	imgInfo.extent = imageExtent;
+
+	imgInfo.mipLevels = 1;
+	imgInfo.arrayLayers = CSM_COUNT;
+	imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+	//TILING lets the gpu shuffle the data as it sees fit
+	//LINEAR is needed for images read from cpu, which turns the image into a 2d array
+	imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imgInfo.usage = imageUsageFlags;
+
 
 	//allocate draw image from gpu memory
 	VmaAllocationCreateInfo imgAllocInfo{};
@@ -1983,19 +2006,65 @@ void VulkanEngine::initShadowMapResources()
 	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
 
 	//allocate and create image
-	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_shadowMapImage.image, &_shadowMapImage.allocation, nullptr);
-
-	//build image view for the draw image to use for rendering
-	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_shadowMapImage.imageFormat, _shadowMapImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_shadowMapImage.imageView));
-
-	//add to deletion queues
+	VkResult result = vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_shadowMapImageArray.image, &_shadowMapImageArray.allocation, nullptr);
 	_mainDeletionQueue.pushFunction(
 		[=]() {
-			vkDestroyImageView(_device, _shadowMapImage.imageView, nullptr);
-			vmaDestroyImage(_allocator, _shadowMapImage.image, _shadowMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+			vmaDestroyImage(_allocator, _shadowMapImageArray.image, _shadowMapImageArray.allocation); //note that VMA allocated objects are deleted with VMA
 		});
+
+	//build image view for the image to use for all cascades
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.pNext = nullptr;
+
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+	viewInfo.image = _shadowMapImageArray.image;
+	viewInfo.format = _shadowMapImageArray.imageFormat;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = CSM_COUNT;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_shadowMapImageArray.fullImageView));
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _shadowMapImageArray.fullImageView, nullptr);
+		});
+
+	float scale = 1;
+	_shadowMapImageArray.imageViews.resize(CSM_COUNT);
+	for (int i = 0; i < CSM_COUNT; i++)
+	{
+		glm::mat4 projection =
+			glm::ortho(-(20.0) * scale, 20.0 * scale,
+				(20.0) * scale, -20.0 * scale,
+				-1050.0, 1050.0);
+		//200.0, 0.0);
+		_shadowMapSceneData[i].proj = projection;
+
+		scale *= CSM_SCALE;
+
+		//build image views for the drawing to individual cascades
+		VkImageViewCreateInfo viewInfo{};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.pNext = nullptr;
+
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+		viewInfo.image = _shadowMapImageArray.image;
+		viewInfo.format = _shadowMapImageArray.imageFormat;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = i;
+		viewInfo.subresourceRange.layerCount = 1;
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_shadowMapImageArray.imageViews[i]));
+
+		//add to deletion queues
+		_mainDeletionQueue.pushFunction(
+			[=]() {
+				vkDestroyImageView(_device, _shadowMapImageArray.imageViews[i], nullptr);
+			});
+	}
 
 
 	//DESCRIPTOR SET LAYOUTS
@@ -2013,7 +2082,7 @@ void VulkanEngine::initShadowMapResources()
 		//	writing to descriptor set
 		_shadowMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _shadowMapDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _shadowMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(0, _shadowMapImageArray.fullImageView, _defaultSampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.updateSet(_device, _shadowMapDescriptorSet);
 	}
 	
@@ -2076,7 +2145,7 @@ void VulkanEngine::initShadowMapResources()
 		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 		//connect image format we will draw to, from draw image
-		pipelineBuilder.setDepthFormat(_shadowMapImage.imageFormat);
+		pipelineBuilder.setDepthFormat(_shadowMapImageArray.imageFormat);
 
 		//build pipeline
 		_shadowGrassPipeline = pipelineBuilder.buildPipeline(_device);
@@ -2147,7 +2216,7 @@ void VulkanEngine::initShadowMapResources()
 		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 		//connect image format we will draw to, from draw image
-		pipelineBuilder.setDepthFormat(_shadowMapImage.imageFormat);
+		pipelineBuilder.setDepthFormat(_shadowMapImageArray.imageFormat);
 
 		//build pipeline
 		_shadowMeshPipeline = pipelineBuilder.buildPipeline(_device);
@@ -2169,8 +2238,8 @@ void VulkanEngine::initShadowMapResources()
 		info.pNext = nullptr;
 
 		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		info.image = _shadowMapImage.image;
-		info.format = _shadowMapImage.imageFormat;
+		info.image = _shadowMapImageArray.image;
+		info.format = _shadowMapImageArray.imageFormat;
 		info.subresourceRange.baseMipLevel = 0;
 		info.subresourceRange.levelCount = 1;
 		info.subresourceRange.baseArrayLayer = 0;

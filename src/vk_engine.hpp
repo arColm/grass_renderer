@@ -9,6 +9,19 @@
 class VulkanEngine
 {
 public:
+	static const int CSM_COUNT = 3;
+
+	struct SceneData
+	{
+		glm::mat4 view;
+		glm::mat4 proj;
+		glm::mat4 viewProj;
+		glm::vec4 ambientColor;
+		glm::vec4 sunlightDirection; //w for sunlight strength
+		glm::vec4 sunlightColor;
+		glm::mat4 sunViewProj[CSM_COUNT];
+		glm::vec4 time;
+	};
 	struct EngineStats
 	{
 		float frameTime;
@@ -182,10 +195,18 @@ public:
 
 	//shadowmap
 	static const int SHADOWMAP_RESOLUTION;
+	static const float CSM_SCALE;
+	struct ShadowMapData {
+		glm::mat4 viewProj[CSM_COUNT];
+	} _shadowMapData;
+	AllocatedImageArray _shadowMapImageArray;
+	AllocatedBuffer _shadowMapDataBuffer;
+	SceneData _shadowMapSceneData[CSM_COUNT];
+
 	VkDescriptorSetLayout _shadowMapDescriptorLayout;
 	VkDescriptorSet _shadowMapDescriptorSet;
-	AllocatedImage _shadowMapImage;
-	SceneData _shadowMapSceneData;
+	AllocatedImage _shadowMapImage;//
+	//SceneData _shadowMapSceneData;//
 	VkPipelineLayout _shadowMeshPipelineLayout;
 	VkPipeline _shadowMeshPipeline; 
 	VkPipelineLayout _shadowGrassPipelineLayout;

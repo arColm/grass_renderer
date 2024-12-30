@@ -56,6 +56,17 @@ struct AllocatedImage
     VkFormat imageFormat;
 };
 
+struct AllocatedImageArray
+{
+    VkImage image;
+    std::vector<VkImageView> imageViews;
+    VmaAllocation allocation;
+    VkImageView fullImageView;
+    VkExtent3D imageExtent;
+    VkFormat imageFormat;
+    
+};
+
 
 
 struct DescriptorAllocator 
@@ -106,18 +117,6 @@ struct GPUMeshBuffers
     AllocatedBuffer indexBuffer;
     AllocatedBuffer vertexBuffer;
     VkDeviceAddress vertexBufferAddress;
-};
-
-struct SceneData
-{
-    glm::mat4 view;
-    glm::mat4 proj;
-    glm::mat4 viewProj;
-    glm::vec4 ambientColor;
-    glm::vec4 sunlightDirection; //w for sunlight strength
-    glm::vec4 sunlightColor;
-    glm::mat4 sunViewProj;
-    glm::vec4 time;
 };
 
 struct GrassData

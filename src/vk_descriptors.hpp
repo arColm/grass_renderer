@@ -43,11 +43,13 @@ private:
 
 struct DescriptorWriter
 {
-	std::deque<VkDescriptorImageInfo> _imageInfos;
+	std::deque<VkDescriptorImageInfo> _imageInfos; //we keep this to keep image infos in scope
+	std::vector<VkDescriptorImageInfo> _imageInfoList;
 	std::deque<VkDescriptorBufferInfo> _bufferInfos;
 	std::vector<VkWriteDescriptorSet> _writes;
 
 	void writeImage(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
+	void writeImageArray(int binding, std::vector<VkImageView>& images, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
 	void writeBuffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
 
 	void clear();
