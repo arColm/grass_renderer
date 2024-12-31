@@ -2798,10 +2798,11 @@ void VulkanEngine::initClouds()
 void VulkanEngine::initWater()
 {
 	static const int WATER_DISTANCE = 60;
+	static const int WATER_QUALITY = 4;
 	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
 
-	uint32_t numVerticesPerSide = (WATER_DISTANCE * 2 + 2);
+	uint32_t numVerticesPerSide = (WATER_DISTANCE * WATER_QUALITY + 2);
 	const size_t vertexBufferSize = numVerticesPerSide * numVerticesPerSide;
 	const size_t indexBufferSize = (numVerticesPerSide - 1) * (numVerticesPerSide - 1) * 6;
 	meshBuffers.vertexBuffer = createBuffer(vertexBufferSize * sizeof(Vertex),
@@ -2883,7 +2884,7 @@ void VulkanEngine::initWater()
 		VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computeVertexPipeline));
 
 		ComputeVertexPushConstants pushConstants{};
-		pushConstants.data = glm::vec4(numVerticesPerSide, 2, 0, 0);
+		pushConstants.data = glm::vec4(numVerticesPerSide, WATER_QUALITY, 0, 0);
 		pushConstants.vertexBuffer = meshBuffers.vertexBufferAddress;
 
 		////clean structures

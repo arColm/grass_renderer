@@ -61,7 +61,7 @@ void main() {
 	v.uv_y = 0;
 	//v.normal = mapData.xyz;
 	v.normal = vec3(0,1,0);
-	v.color = vec4(0.471,0.529,0.788,0.42);
+	v.color = vec4(0.471,0.529,0.788,0.55);
 	//v.color = vec4(0.14f,0.32f*(1+y/10),0.08f,1.0f);
 	//v.color = vec4(v.normal,1.0);
 	

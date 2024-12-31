@@ -61,14 +61,16 @@ void main() {
 	vec4 position = vec4(v.position, 1.0f);
 
     //float wave =-layeredNoise(position.xz +vec2(sceneData.time.x),5,1.0);
-    float wave =-getWindDirection(position.xyz).y;
-	position.y += wave;
+    //float wave =-getWindDirection(position.xyz).y;
+	//position.y += wave;
+    vec3 wave =-getWindDirection(position.xyz);
+	position.xyz += wave; //idk but i think this looks better than just changing height some how ???
 
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * position;
 	//gl_Position = sceneData.viewProj * position;
 
 	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outNormal = normalize((PushConstants.render_matrix * vec4(wave,1-2*wave,-wave, 0.f)).xyz);
+	outNormal = normalize((PushConstants.render_matrix * vec4(wave.y,1-2*wave.y,-wave.y, 1.f)).xyz);
 	outColor = v.color;// * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
