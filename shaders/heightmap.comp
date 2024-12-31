@@ -11,7 +11,14 @@ layout(rgba16f,set = 0, binding = 0) uniform image2D data;
 
 float getHeight(vec2 coord) {
 	//return 6*fbm(coord,7,1.0,1.0,2.0,0.9);
-	return 6*layeredNoise(coord*0.2,7,0.1,4,0.1);
+	float height = 6*layeredNoise(coord*0.2,7,0.1,4,0.1)+5;
+	//float a = 1.0/(0.1*distance(coord,imageSize(data)/2)+1);
+    //float u = a*a*(3.0-2.0*a);
+	//height += -25*(u);
+
+	float a = 0.03*clamp(distance(coord,imageSize(data)/2),0,33);
+	height += 15.0*(a*a*(3.0-2.0*a))-15.0;
+	return height;
 }
 
 void main() {

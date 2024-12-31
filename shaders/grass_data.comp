@@ -63,7 +63,8 @@ void main()
 	
 	position.y += heightData.a;
 
-	if(heightData.y <=0.7) position = vec4(0,-20,0,0);
+	if(heightData.y <=0.7) position = vec4(0,-50,0,0);
+	if(heightData.w <=0) position = vec4(0,-50,0,0);
 
 	positions[int(gl_GlobalInvocationID.x)] = position;
 

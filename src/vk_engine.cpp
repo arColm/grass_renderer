@@ -29,7 +29,7 @@
 const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
 const int VulkanEngine::SHADOWMAP_RESOLUTION = 2048;
 const int VulkanEngine::RENDER_DISTANCE = 600;
-const float VulkanEngine::CSM_SCALE = 3.f;
+const float VulkanEngine::CSM_SCALE = 3.5f;
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -594,8 +594,8 @@ void VulkanEngine::run()
 
 		if (ImGui::Begin("grass"))
 		{
-			ImGui::SliderInt("density", &UI_grassDensity, 1, 100);
-			ImGui::SliderInt("distance", &UI_maxGrassDistance, 1, 100);
+			ImGui::SliderInt("density", &UI_grassDensity, 1, 40);
+			ImGui::SliderInt("distance", &UI_maxGrassDistance, 1, 300);
 			ImGui::Text("grassCount: %d", _grassCount);
 			ImGui::Text("tris: %d", UI_triangleCount);
 
@@ -2036,8 +2036,8 @@ void VulkanEngine::initShadowMapResources()
 	for (int i = 0; i < CSM_COUNT; i++)
 	{
 		glm::mat4 projection =
-			glm::ortho(-(20.0) * scale, 20.0 * scale,
-				(20.0) * scale, -20.0 * scale,
+			glm::ortho(-(10.0) * scale, 10.0 * scale,
+				(10.0) * scale, -10.0 * scale,
 				-1050.0, 1050.0);
 		//200.0, 0.0);
 		_shadowMapSceneData[i].proj = projection;
