@@ -201,6 +201,10 @@
     <None Include="shaders\sky.comp" />
     <None Include="shaders\skybox.frag" />
     <None Include="shaders\skybox.vert" />
+    <None Include="shaders\water.frag" />
+    <None Include="shaders\water.vert" />
+    <None Include="shaders\water_mesh_indices.comp" />
+    <None Include="shaders\water_mesh_vertices.comp" />
     <None Include="shaders\windmap.comp" />
     <None Include="shaders\_vertex.glsl" />
   </ItemGroup>

@@ -1,0 +1,34 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+
+layout (local_size_x = 64) in;
+
+
+layout(buffer_reference, std430) writeonly buffer IndexBuffer {
+	uint indices[];
+};
+
+layout( push_constant ) uniform constants
+{
+	//data.x == number of squares on 1 side
+	vec4 data;
+	IndexBuffer indexBuffer;
+} PushConstants;
+
+//called once per square (2 tris)
+void main() {
+	uint startIndex = gl_GlobalInvocationID.x * 6;
+	int sideLength = int(PushConstants.data.x);
+	uint size = (sideLength+1)*(sideLength+1)*6;
+
+	if(startIndex>=size) return;
+	
+	uint blIndex = gl_GlobalInvocationID.x + uint(floor(gl_GlobalInvocationID.x/sideLength));
+
+	PushConstants.indexBuffer.indices[startIndex] = blIndex;
+	PushConstants.indexBuffer.indices[startIndex+1] = blIndex+1;
+	PushConstants.indexBuffer.indices[startIndex+2] = blIndex+1 + sideLength;
+	PushConstants.indexBuffer.indices[startIndex+3] = blIndex+1;
+	PushConstants.indexBuffer.indices[startIndex+4] = blIndex+2 + sideLength;
+	PushConstants.indexBuffer.indices[startIndex+5] = blIndex+1 + sideLength;
+}

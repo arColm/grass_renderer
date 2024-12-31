@@ -226,5 +226,17 @@
     <None Include="shaders\cloud.vert">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\water_mesh_indices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\water_mesh_vertices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\water.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\water.vert">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

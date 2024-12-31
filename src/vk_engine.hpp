@@ -233,6 +233,13 @@ public:
 	VkPipelineLayout _cloudPipelineLayout;
 	VkPipeline _cloudPipeline;
 
+	//water
+	std::shared_ptr<MeshAsset> _waterMesh;
+	VkPipelineLayout _waterPipelineLayout;
+	VkPipeline _waterPipeline;
+	VkDescriptorSet _waterDataDescriptorSet;
+	VkDescriptorSetLayout _waterDataDescriptorLayout;
+
 	//initializes everything in engine
 	void init();
 
@@ -296,5 +303,6 @@ private:
 	void initWindMap();
 	void initSkybox();
 	void initClouds();
+	void initWater();
 
 };
