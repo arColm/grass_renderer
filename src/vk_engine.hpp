@@ -125,6 +125,10 @@ public:
 	VmaAllocator _allocator;
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
+	AllocatedImage _normalsImage;
+	//AllocatedImage _positionsImage;
+	AllocatedImage _specularMapImage; 
+	AllocatedImage _finalDrawImage;
 	AllocatedImage _noiseImage;
 	VkExtent2D _drawExtent;
 	float _renderScale = 1.f;

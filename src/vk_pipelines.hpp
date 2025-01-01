@@ -4,6 +4,12 @@ namespace vkutil
 {
 	bool loadShaderModule(const char* filePath, VkDevice device, VkShaderModule* outShaderModule);
 
+	enum ColorBlendingMode {
+		DISABLED,
+		ADDITIVE,
+		ALPHABLEND
+	};
+
 	class PipelineBuilder
 	{
 	public:
@@ -11,12 +17,12 @@ namespace vkutil
 
 		VkPipelineInputAssemblyStateCreateInfo _inputAssembly;
 		VkPipelineRasterizationStateCreateInfo _rasterizer;
-		VkPipelineColorBlendAttachmentState _colorBlendAttachment;
+		std::vector<VkPipelineColorBlendAttachmentState> _colorBlendAttachments;
 		VkPipelineMultisampleStateCreateInfo _multisampling;
 		VkPipelineLayout _pipelineLayout;
 		VkPipelineDepthStencilStateCreateInfo _depthStencil;
 		VkPipelineRenderingCreateInfo _renderInfo;
-		VkFormat _colorAttachmentFormat;
+		std::vector<VkFormat> _colorAttachmentFormats;
 
 		PipelineBuilder() { clear(); }
 
@@ -31,15 +37,20 @@ namespace vkutil
 		void setCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
 		void setMultisamplingNone();
 
-		void disableBlending();
-		void enableBlendingAdditive();
-		void enableBlendingAlphaBlend();
+		void setBlendingModes(const std::vector<ColorBlendingMode>& modes);
 
 		void disableDepthTest();
 		void enableDepthTest(bool depthWriteEnable, VkCompareOp op);
 
 		void setColorAttachmentFormat(VkFormat format);
+		void setColorAttachmentFormats(const std::vector<VkFormat>& format);
 		void setDepthFormat(VkFormat format);
 
+	private:
+
+		void disableBlending(VkPipelineColorBlendAttachmentState& colorBlendAttachment);
+		void enableBlendingAdditive(VkPipelineColorBlendAttachmentState& colorBlendAttachment);
+		void enableBlendingAlphaBlend(VkPipelineColorBlendAttachmentState& colorBlendAttachment);
 	};
+
 }

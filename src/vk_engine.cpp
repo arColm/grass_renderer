@@ -166,17 +166,22 @@ void VulkanEngine::draw()
 	//render
 	//drawBackground(cmd);
 
+	//todo write a transitionImages function to transition the all the colors together
 	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
 	//calculate grass positions
 	drawGeometry(cmd);
 
 	//prepare to copy drawimage to swapchain image
 	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	
-	vkutil::copyImageToImage(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
+	vkutil::copyImageToImage(cmd, _specularMapImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
 
 	//prepare swapchain image to draw GUI
 	//	note: we use COLOR_ATTACHMENT_OPTIMAL when calling rendering commands
@@ -288,10 +293,31 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	//begin a render pass connected to draw image
 	//TODO if we want to point to no color attachment, make the imageview nullptr!!! and use VK_ATTACHMENT_UNUSED
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkClearColorValue normalClearValue{ .float32 = { 0.f,0.f,0.f,0.f } };
+	VkRenderingAttachmentInfo normalsAttachment = vkinit::attachmentInfo(_normalsImage.imageView, (VkClearValue*)&normalClearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkClearColorValue specularMapClearValue{ .float32 = {0} };
+	VkRenderingAttachmentInfo specularMapAttachment = vkinit::attachmentInfo(_specularMapImage.imageView, (VkClearValue*)&specularMapClearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo renderingAttachments[] = {
+		colorAttachment,
+		normalsAttachment,
+		specularMapAttachment
+	};
+
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	VkRenderingInfo renderInfo = vkinit::renderingInfo(_drawExtent, &colorAttachment, &depthAttachment);
-	vkCmdBeginRendering(cmd, &renderInfo);
+	//VkRenderingInfo renderInfo = vkinit::renderingInfo(_drawExtent, &colorAttachment, &depthAttachment);
+	VkRenderingInfo renderingInfo{};
+	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderingInfo.pNext = nullptr;
+
+	renderingInfo.renderArea = VkRect2D{ VkOffset2D{0,0}, _drawExtent };
+	renderingInfo.layerCount = 1;
+	renderingInfo.colorAttachmentCount = 3;
+	renderingInfo.pColorAttachments = renderingAttachments;
+	renderingInfo.pDepthAttachment = &depthAttachment;
+	renderingInfo.pStencilAttachment = nullptr;
+
+	vkCmdBeginRendering(cmd, &renderingInfo);
 
 	//set dynamic viewport and scissor
 	VkViewport viewport{};
@@ -879,17 +905,11 @@ void VulkanEngine::initSwapchain()
 		1
 	};
 
-	//hardcoding draw format to 32 bit float
-	_drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	_drawImage.imageExtent = drawImageExtent;
-
 	VkImageUsageFlags drawImageUsageFlags{};
 	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;		//can copy from image
 	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;		//can copy to image
 	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
 	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;	//allows us to draw geometry on it through graphics pipeline
-
-	VkImageCreateInfo rimgInfo = vkinit::imageCreateInfo(_drawImage.imageFormat, drawImageUsageFlags, drawImageExtent);
 
 	//allocate draw image from gpu memory
 	VmaAllocationCreateInfo rimgAllocInfo{};
@@ -897,18 +917,64 @@ void VulkanEngine::initSwapchain()
 	rimgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
 
 	//allocate and create image
-	vmaCreateImage(_allocator, &rimgInfo, &rimgAllocInfo, &_drawImage.image, &_drawImage.allocation, nullptr);
+	//hardcoding draw format to 32 bit float
+	_drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_drawImage.imageExtent = drawImageExtent;
+	VkImageCreateInfo drawImageInfo = vkinit::imageCreateInfo(_drawImage.imageFormat, drawImageUsageFlags, drawImageExtent);
+	vmaCreateImage(_allocator, &drawImageInfo, &rimgAllocInfo, &_drawImage.image, &_drawImage.allocation, nullptr);
+
+	_normalsImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_normalsImage.imageExtent = drawImageExtent;
+	VkImageCreateInfo normalsImageInfo = vkinit::imageCreateInfo(_normalsImage.imageFormat, drawImageUsageFlags, drawImageExtent);
+	vmaCreateImage(_allocator, &normalsImageInfo, &rimgAllocInfo, &_normalsImage.image, &_normalsImage.allocation, nullptr);
+	//vmaCreateImage(_allocator, &rimgInfo, &rimgAllocInfo, &_positionsImage.image, &_positionsImage.allocation, nullptr);
+
+	_specularMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_specularMapImage.imageExtent = drawImageExtent;
+	VkImageCreateInfo specularMapImageInfo = vkinit::imageCreateInfo(_specularMapImage.imageFormat, drawImageUsageFlags, drawImageExtent);
+	vmaCreateImage(_allocator, &specularMapImageInfo, &rimgAllocInfo, &_specularMapImage.image, &_specularMapImage.allocation, nullptr);
+
+	_finalDrawImage.imageFormat = _drawImage.imageFormat;
+	_finalDrawImage.imageExtent = drawImageExtent;
+	VkImageCreateInfo finalDrawImageInfo = vkinit::imageCreateInfo(_finalDrawImage.imageFormat, drawImageUsageFlags, drawImageExtent);
+	vmaCreateImage(_allocator, &finalDrawImageInfo, &rimgAllocInfo, &_finalDrawImage.image, &_finalDrawImage.allocation, nullptr);
 
 	//build image view for the draw image to use for rendering
-	VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-
-	VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_drawImage.imageView));
+	
+	{
+		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_drawImage.imageView));
+	}
+	{
+		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_normalsImage.imageFormat, _normalsImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_normalsImage.imageView));
+	}
+	//{
+	//	VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_positionsImage.imageFormat, _positionsImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	//	VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_positionsImage.imageView));
+	//}
+	{
+		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_specularMapImage.imageFormat, _specularMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_specularMapImage.imageView));
+	}
+	{
+		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_finalDrawImage.imageFormat, _finalDrawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_finalDrawImage.imageView));
+	}
 
 	//add to deletion queues
 	_mainDeletionQueue.pushFunction(
 		[=]() {
 			vkDestroyImageView(_device, _drawImage.imageView, nullptr);
 			vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation); //note that VMA allocated objects are deleted with VMA
+			vkDestroyImageView(_device, _normalsImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _normalsImage.image, _normalsImage.allocation);
+			//vkDestroyImageView(_device, _positionsImage.imageView, nullptr);
+			//vmaDestroyImage(_allocator, _positionsImage.image, _positionsImage.allocation);
+			vkDestroyImageView(_device, _specularMapImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _specularMapImage.image, _specularMapImage.allocation); 
+			vkDestroyImageView(_device, _finalDrawImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _finalDrawImage.image, _finalDrawImage.allocation);
 		});
 
 	//DEPTH IMAGE
@@ -1292,6 +1358,14 @@ void VulkanEngine::initMeshPipeline()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_meshPipelineLayout));
 
+	//color attachment formats
+	std::vector<VkFormat> colorAttachmentFormats = {
+		_drawImage.imageFormat,
+		_normalsImage.imageFormat,
+		_specularMapImage.imageFormat
+	};
+
+
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
 
@@ -1307,13 +1381,18 @@ void VulkanEngine::initMeshPipeline()
 	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
-	//	disable blending
-	pipelineBuilder.enableBlendingAlphaBlend();
+	//	BLENDING
+	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+	};
+	pipelineBuilder.setBlendingModes(modes);
 	// depth testing
 	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 	//connect image format we will draw to, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	//build pipeline
@@ -1372,6 +1451,12 @@ void VulkanEngine::initGrassPipeline()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_grassPipelineLayout));
 
+	//color attachment formats
+	std::vector<VkFormat> colorAttachmentFormats = {
+		_drawImage.imageFormat,
+		_normalsImage.imageFormat,
+		_specularMapImage.imageFormat
+	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
 
@@ -1387,13 +1472,18 @@ void VulkanEngine::initGrassPipeline()
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
-	//	disable blending
-	pipelineBuilder.enableBlendingAlphaBlend();
+	//	BLENDING
+	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+	};
+	pipelineBuilder.setBlendingModes(modes);
 	// depth testing
 	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 	//connect image format we will draw to, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	//build pipeline
@@ -2160,8 +2250,13 @@ void VulkanEngine::initShadowMapResources()
 		pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 		//	disable multisampling
 		pipelineBuilder.setMultisamplingNone();
-		//	disable blending
-		pipelineBuilder.enableBlendingAlphaBlend();
+		//	BLENDING
+		std::vector<vkutil::ColorBlendingMode> modes = {
+			vkutil::ALPHABLEND,
+			vkutil::ALPHABLEND,
+			vkutil::ALPHABLEND,
+		};
+		pipelineBuilder.setBlendingModes(modes);
 		// depth testing
 		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
@@ -2231,8 +2326,13 @@ void VulkanEngine::initShadowMapResources()
 		pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 		//	disable multisampling
 		pipelineBuilder.setMultisamplingNone();
-		//	disable blending
-		pipelineBuilder.enableBlendingAlphaBlend();
+		//	BLENDING
+		std::vector<vkutil::ColorBlendingMode> modes = {
+			vkutil::ALPHABLEND,
+			vkutil::ALPHABLEND,
+			vkutil::ALPHABLEND,
+		};
+		pipelineBuilder.setBlendingModes(modes);
 		// depth testing
 		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
@@ -2590,6 +2690,12 @@ void VulkanEngine::initSkybox()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_skyboxPipelineLayout));
 
+	//color attachment formats
+	std::vector<VkFormat> colorAttachmentFormats = {
+		_drawImage.imageFormat,
+		_normalsImage.imageFormat,
+		_specularMapImage.imageFormat
+	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
 
@@ -2605,14 +2711,19 @@ void VulkanEngine::initSkybox()
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
-	//	disable blending
-	pipelineBuilder.enableBlendingAlphaBlend();
+	//	BLENDING
+	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+	};
+	pipelineBuilder.setBlendingModes(modes);
 	// depth testing
 	//pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 	pipelineBuilder.disableDepthTest();
 
 	//connect image format we will draw to, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	//build pipeline
@@ -2756,6 +2867,12 @@ void VulkanEngine::initClouds()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_cloudPipelineLayout));
 
+	//color attachment formats
+	std::vector<VkFormat> colorAttachmentFormats = {
+		_drawImage.imageFormat,
+		_normalsImage.imageFormat,
+		_specularMapImage.imageFormat
+	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
 
@@ -2771,14 +2888,19 @@ void VulkanEngine::initClouds()
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
-	//	disable blending
-	pipelineBuilder.enableBlendingAlphaBlend();
+	//	BLENDING
+	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+	};
+	pipelineBuilder.setBlendingModes(modes);
 	// depth testing
 	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 	//pipelineBuilder.disableDepthTest();
 
 	//connect image format we will draw to, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	//build pipeline
@@ -3058,6 +3180,12 @@ void VulkanEngine::initWater()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_waterPipelineLayout));
 
+	//color attachment formats
+	std::vector<VkFormat> colorAttachmentFormats = {
+		_drawImage.imageFormat,
+		_normalsImage.imageFormat,
+		_specularMapImage.imageFormat
+	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
 
@@ -3073,13 +3201,18 @@ void VulkanEngine::initWater()
 	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 	//	disable multisampling
 	pipelineBuilder.setMultisamplingNone();
-	//	disable blending
-	pipelineBuilder.enableBlendingAlphaBlend();
+	//	BLENDING
+	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+		vkutil::ALPHABLEND,
+	};
+	pipelineBuilder.setBlendingModes(modes);
 	// depth testing
 	pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 	//connect image format we will draw to, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	//build pipeline
