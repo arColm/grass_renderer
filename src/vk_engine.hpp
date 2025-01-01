@@ -148,6 +148,10 @@ public:
 	VkPipelineLayout _backgroundPipelineLayout;
 	VkPipeline _backgroundPipeline;
 
+	//deferred pipeline
+	VkPipelineLayout _deferredPipelineLayout;
+	VkPipeline _deferredPipeline;
+
 	//mesh pipeline
 	VkDescriptorSetLayout _sceneDataDescriptorLayout;
 	VkPipelineLayout _meshPipelineLayout;
@@ -257,6 +261,8 @@ public:
 	void drawGeometry(VkCommandBuffer cmd);
 	void drawShadowMap(VkCommandBuffer cmd);
 
+	void drawDeferred(VkCommandBuffer cmd);
+
 	void updateGrassData(VkCommandBuffer cmd);
 
 	//run main loop
@@ -288,6 +294,7 @@ private:
 
 	void initPipelines();
 	void initBackgroundPipelines();
+	void initDeferredPipelines();
 
 	void initSampler();
 

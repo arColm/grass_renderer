@@ -169,19 +169,27 @@ void VulkanEngine::draw()
 	//todo write a transitionImages function to transition the all the colors together
 	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	
 	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
 	//calculate grass positions
 	drawGeometry(cmd);
 
-	//prepare to copy drawimage to swapchain image
-	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	//prepare to do deferred rendering
+	vkutil::transitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _finalDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	drawDeferred(cmd);
+
+	//prepare to copy final image to swapchain image for presenting
+	vkutil::transitionImage(cmd, _finalDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	
-	vkutil::copyImageToImage(cmd, _specularMapImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
+	vkutil::copyImageToImage(cmd, _finalDrawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
 
 	//prepare swapchain image to draw GUI
 	//	note: we use COLOR_ATTACHMENT_OPTIMAL when calling rendering commands
@@ -536,6 +544,22 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 
 		vkCmdEndRendering(cmd);
 	}
+}
+
+void VulkanEngine::drawDeferred(VkCommandBuffer cmd)
+{
+	ComputePushConstants pushConstants;
+	//pushConstants.data1 = glm::vec4(_time, 1, 1, 1);
+
+	//bind the gradient drawing compute pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _deferredPipeline);
+
+	//bind the descriptor set containing the draw image for the compute pipeline
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _deferredPipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
+	vkCmdPushConstants(cmd, _deferredPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+
+	//execute compute pipeline dispatch
+	vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
 }
 
 void VulkanEngine::updateGrassData(VkCommandBuffer cmd)
@@ -982,6 +1006,7 @@ void VulkanEngine::initSwapchain()
 	_depthImage.imageExtent = drawImageExtent;
 	VkImageUsageFlags depthImageUsages{};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
 	VkImageCreateInfo dimgInfo = vkinit::imageCreateInfo(_depthImage.imageFormat, depthImageUsages, _depthImage.imageExtent);
 
@@ -1118,6 +1143,10 @@ void VulkanEngine::initDescriptors()
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+		builder.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	{
@@ -1141,7 +1170,11 @@ void VulkanEngine::initDescriptors()
 	_drawImageDescriptors = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
 
 	DescriptorWriter writer;
-	writer.writeImage(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(0, _finalDrawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(1, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(2, _depthImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+	writer.writeImage(3, _normalsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(4, _specularMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.updateSet(_device, _drawImageDescriptors);
 
 	//frame descriptors
@@ -1179,13 +1212,13 @@ void VulkanEngine::initDescriptors()
 void VulkanEngine::initPipelines()
 {
 	initBackgroundPipelines();
+	initDeferredPipelines();
 	initMeshPipeline();
 	initGrassPipeline();
 }
 
 void VulkanEngine::initBackgroundPipelines()
 {
-
 	VkPipelineLayoutCreateInfo computeLayout{};
 	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	computeLayout.pNext = nullptr;
@@ -1235,6 +1268,59 @@ void VulkanEngine::initBackgroundPipelines()
 		vkDestroyPipelineLayout(_device, _backgroundPipelineLayout, nullptr);
 		vkDestroyPipeline(_device, _backgroundPipeline, nullptr);
 	});
+}
+
+void VulkanEngine::initDeferredPipelines()
+{
+	VkPipelineLayoutCreateInfo computeLayout{};
+	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayout.pNext = nullptr;
+
+	computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
+	computeLayout.setLayoutCount = 1;
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(ComputePushConstants);
+	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	computeLayout.pPushConstantRanges = &pushConstant;
+	computeLayout.pushConstantRangeCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_deferredPipelineLayout));
+
+	//load shaders
+
+	VkShaderModule deferredReflectionShader;
+	if (!vkutil::loadShaderModule("./shaders/deferred.comp.spv", _device, &deferredReflectionShader))
+	{
+		fmt::print("Error when building deferred reflections compute shader \n");
+	}
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.pName = "main"; //name of entrypoint function
+	stageInfo.module = deferredReflectionShader;
+
+	//create pipelines
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _deferredPipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_deferredPipeline));
+
+
+	//deletion
+	vkDestroyShaderModule(_device, deferredReflectionShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _deferredPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _deferredPipeline, nullptr);
+		});
 }
 
 void VulkanEngine::initSampler()

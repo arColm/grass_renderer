@@ -238,5 +238,8 @@
     <None Include="shaders\water.vert">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\deferred.comp">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
