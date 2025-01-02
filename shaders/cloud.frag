@@ -10,9 +10,7 @@ float PI = 3.1415926;
 layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inPlayerPos;
 
-layout (location = 0) out vec4 outFragColor;
-layout (location = 1) out vec4 outNormal;
-layout (location = 2) out vec4 outSpecularMap;
+#include "_fragOutput.glsl"
 
 // inspired by https://www.shadertoy.com/view/4tdSWr
 
@@ -36,5 +34,6 @@ void main() {
 
 	outFragColor = vec4(1,1,1,opacity);
     outNormal = vec4(0,-1,0,1);
+	outPosition = sceneData.view * vec4(inPosition,1);
 	outSpecularMap = vec4(0);
 }

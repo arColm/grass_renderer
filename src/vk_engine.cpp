@@ -172,6 +172,7 @@ void VulkanEngine::draw()
 	
 	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd, _positionsImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
 	//calculate grass positions
 	drawGeometry(cmd);
@@ -181,6 +182,7 @@ void VulkanEngine::draw()
 	vkutil::transitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	vkutil::transitionImage(cmd, _normalsImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _specularMapImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _positionsImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _finalDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	drawDeferred(cmd);
@@ -305,10 +307,13 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	VkRenderingAttachmentInfo normalsAttachment = vkinit::attachmentInfo(_normalsImage.imageView, (VkClearValue*)&normalClearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkClearColorValue specularMapClearValue{ .float32 = {0} };
 	VkRenderingAttachmentInfo specularMapAttachment = vkinit::attachmentInfo(_specularMapImage.imageView, (VkClearValue*)&specularMapClearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkClearColorValue positionsClearValue{ .float32 = {0} };
+	VkRenderingAttachmentInfo positionsAttachment = vkinit::attachmentInfo(_positionsImage.imageView, (VkClearValue*)&positionsClearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo renderingAttachments[] = {
 		colorAttachment,
 		normalsAttachment,
-		specularMapAttachment
+		specularMapAttachment,
+		positionsAttachment
 	};
 
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -320,7 +325,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	renderingInfo.renderArea = VkRect2D{ VkOffset2D{0,0}, _drawExtent };
 	renderingInfo.layerCount = 1;
-	renderingInfo.colorAttachmentCount = 3;
+	renderingInfo.colorAttachmentCount = 4;
 	renderingInfo.pColorAttachments = renderingAttachments;
 	renderingInfo.pDepthAttachment = &depthAttachment;
 	renderingInfo.pStencilAttachment = nullptr;
@@ -548,14 +553,35 @@ void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 
 void VulkanEngine::drawDeferred(VkCommandBuffer cmd)
 {
+	//todo probably shouldnt repeat this but whatever
+	VkDescriptorSet sceneDataDescriptorSet = getCurrentFrame().descriptorAllocator.allocate(_device, _sceneDataDescriptorLayout, nullptr);
+	{
+		//	Scene Data
+		AllocatedBuffer sceneDataBuffer = createBuffer(sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		getCurrentFrame().deletionQueue.pushFunction(
+			[=, this]() {
+				destroyBuffer(sceneDataBuffer);
+			}
+		);
+		SceneData* sceneUniformData = (SceneData*)sceneDataBuffer.allocation->GetMappedData();
+		*sceneUniformData = _sceneData; //write scene data to buffer
+
+		DescriptorWriter writer;
+		writer.writeBuffer(0, sceneDataBuffer.buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		writer.updateSet(_device, sceneDataDescriptorSet);
+	}
 	ComputePushConstants pushConstants;
-	//pushConstants.data1 = glm::vec4(_time, 1, 1, 1);
+	pushConstants.data1 = glm::vec4(_player._position.x, _player._position.y, _player._position.z, 1);
 
 	//bind the gradient drawing compute pipeline
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _deferredPipeline);
 
 	//bind the descriptor set containing the draw image for the compute pipeline
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _deferredPipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
+	VkDescriptorSet descriptors[] = {
+		sceneDataDescriptorSet,
+		_drawImageDescriptors
+	};
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _deferredPipelineLayout, 0, 2, descriptors, 0, nullptr);
 	vkCmdPushConstants(cmd, _deferredPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 
 	//execute compute pipeline dispatch
@@ -951,7 +977,11 @@ void VulkanEngine::initSwapchain()
 	_normalsImage.imageExtent = drawImageExtent;
 	VkImageCreateInfo normalsImageInfo = vkinit::imageCreateInfo(_normalsImage.imageFormat, drawImageUsageFlags, drawImageExtent);
 	vmaCreateImage(_allocator, &normalsImageInfo, &rimgAllocInfo, &_normalsImage.image, &_normalsImage.allocation, nullptr);
-	//vmaCreateImage(_allocator, &rimgInfo, &rimgAllocInfo, &_positionsImage.image, &_positionsImage.allocation, nullptr);
+
+	_positionsImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_positionsImage.imageExtent = drawImageExtent;
+	VkImageCreateInfo positionsImageInfo = vkinit::imageCreateInfo(_positionsImage.imageFormat, drawImageUsageFlags, drawImageExtent);
+	vmaCreateImage(_allocator, &positionsImageInfo, &rimgAllocInfo, &_positionsImage.image, &_positionsImage.allocation, nullptr);
 
 	_specularMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	_specularMapImage.imageExtent = drawImageExtent;
@@ -973,10 +1003,10 @@ void VulkanEngine::initSwapchain()
 		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_normalsImage.imageFormat, _normalsImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_normalsImage.imageView));
 	}
-	//{
-	//	VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_positionsImage.imageFormat, _positionsImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-	//	VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_positionsImage.imageView));
-	//}
+	{
+		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_positionsImage.imageFormat, _positionsImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_positionsImage.imageView));
+	}
 	{
 		VkImageViewCreateInfo rviewInfo = vkinit::imageViewCreateInfo(_specularMapImage.imageFormat, _specularMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 		VK_CHECK(vkCreateImageView(_device, &rviewInfo, nullptr, &_specularMapImage.imageView));
@@ -993,8 +1023,8 @@ void VulkanEngine::initSwapchain()
 			vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation); //note that VMA allocated objects are deleted with VMA
 			vkDestroyImageView(_device, _normalsImage.imageView, nullptr);
 			vmaDestroyImage(_allocator, _normalsImage.image, _normalsImage.allocation);
-			//vkDestroyImageView(_device, _positionsImage.imageView, nullptr);
-			//vmaDestroyImage(_allocator, _positionsImage.image, _positionsImage.allocation);
+			vkDestroyImageView(_device, _positionsImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _positionsImage.image, _positionsImage.allocation);
 			vkDestroyImageView(_device, _specularMapImage.imageView, nullptr);
 			vmaDestroyImage(_allocator, _specularMapImage.image, _specularMapImage.allocation); 
 			vkDestroyImageView(_device, _finalDrawImage.imageView, nullptr);
@@ -1147,12 +1177,13 @@ void VulkanEngine::initDescriptors()
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 		builder.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		builder.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-		_sceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		_sceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;
@@ -1175,6 +1206,7 @@ void VulkanEngine::initDescriptors()
 	writer.writeImage(2, _depthImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 	writer.writeImage(3, _normalsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.writeImage(4, _specularMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(5, _positionsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.updateSet(_device, _drawImageDescriptors);
 
 	//frame descriptors
@@ -1276,8 +1308,12 @@ void VulkanEngine::initDeferredPipelines()
 	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	computeLayout.pNext = nullptr;
 
-	computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
+	VkDescriptorSetLayout layouts[] = {
+		_sceneDataDescriptorLayout,
+		_drawImageDescriptorLayout,
+	};
+	computeLayout.pSetLayouts = layouts;
+	computeLayout.setLayoutCount = 2;
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
@@ -1448,7 +1484,8 @@ void VulkanEngine::initMeshPipeline()
 	std::vector<VkFormat> colorAttachmentFormats = {
 		_drawImage.imageFormat,
 		_normalsImage.imageFormat,
-		_specularMapImage.imageFormat
+		_specularMapImage.imageFormat,
+		_positionsImage.imageFormat
 	};
 
 
@@ -1469,6 +1506,7 @@ void VulkanEngine::initMeshPipeline()
 	pipelineBuilder.setMultisamplingNone();
 	//	BLENDING
 	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
@@ -1541,7 +1579,8 @@ void VulkanEngine::initGrassPipeline()
 	std::vector<VkFormat> colorAttachmentFormats = {
 		_drawImage.imageFormat,
 		_normalsImage.imageFormat,
-		_specularMapImage.imageFormat
+		_specularMapImage.imageFormat,
+		_positionsImage.imageFormat
 	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
@@ -1560,6 +1599,7 @@ void VulkanEngine::initGrassPipeline()
 	pipelineBuilder.setMultisamplingNone();
 	//	BLENDING
 	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
@@ -2780,7 +2820,8 @@ void VulkanEngine::initSkybox()
 	std::vector<VkFormat> colorAttachmentFormats = {
 		_drawImage.imageFormat,
 		_normalsImage.imageFormat,
-		_specularMapImage.imageFormat
+		_specularMapImage.imageFormat,
+		_positionsImage.imageFormat
 	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
@@ -2799,6 +2840,7 @@ void VulkanEngine::initSkybox()
 	pipelineBuilder.setMultisamplingNone();
 	//	BLENDING
 	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
@@ -2957,7 +2999,8 @@ void VulkanEngine::initClouds()
 	std::vector<VkFormat> colorAttachmentFormats = {
 		_drawImage.imageFormat,
 		_normalsImage.imageFormat,
-		_specularMapImage.imageFormat
+		_specularMapImage.imageFormat,
+		_positionsImage.imageFormat
 	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
@@ -2976,6 +3019,7 @@ void VulkanEngine::initClouds()
 	pipelineBuilder.setMultisamplingNone();
 	//	BLENDING
 	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
@@ -3270,7 +3314,8 @@ void VulkanEngine::initWater()
 	std::vector<VkFormat> colorAttachmentFormats = {
 		_drawImage.imageFormat,
 		_normalsImage.imageFormat,
-		_specularMapImage.imageFormat
+		_specularMapImage.imageFormat,
+		_positionsImage.imageFormat
 	};
 	//CREATE PIPELINE
 	vkutil::PipelineBuilder pipelineBuilder;
@@ -3289,6 +3334,7 @@ void VulkanEngine::initWater()
 	pipelineBuilder.setMultisamplingNone();
 	//	BLENDING
 	std::vector<vkutil::ColorBlendingMode> modes = {
+		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,
 		vkutil::ALPHABLEND,

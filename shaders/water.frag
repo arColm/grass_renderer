@@ -15,9 +15,7 @@ layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 inPlayerPos;
 layout (location = 4) in vec3 inPos;
 
-layout (location = 0) out vec4 outFragColor;
-layout (location = 1) out vec4 outNormal;
-layout (location = 2) out vec4 outSpecularMap;
+#include "_fragOutput.glsl"
 
 float ShadowCalculation() 
 {
@@ -77,5 +75,6 @@ void main() {
 	//outFragColor = vec4(light,1.0f);
 
 	outNormal = vec4(inNormal,1);
+	outPosition = sceneData.view * vec4(inPos,1);
 	outSpecularMap = vec4(1);
 }

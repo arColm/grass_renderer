@@ -8,9 +8,7 @@ float PI = 3.1415926;
 
 layout (location = 0) in vec3 inPosition;
 
-layout (location = 0) out vec4 outFragColor;
-layout (location = 1) out vec4 outNormal;
-layout (location = 2) out vec4 outSpecularMap;
+#include "_fragOutput.glsl"
 
 float EaseInOutSine(float x)
 { 
@@ -83,5 +81,6 @@ void main() {
 	color = mix(sunFragColor,horizonFragColor,0.2);
 	outFragColor = color;
 	outNormal = vec4(-normalizedPos,1);
+	outPosition = sceneData.view * vec4(inPosition,1);
 	outSpecularMap = vec4(0);
 }

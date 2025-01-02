@@ -126,7 +126,7 @@ public:
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
 	AllocatedImage _normalsImage;
-	//AllocatedImage _positionsImage;
+	AllocatedImage _positionsImage;
 	AllocatedImage _specularMapImage; 
 	AllocatedImage _finalDrawImage;
 	AllocatedImage _noiseImage;

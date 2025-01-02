@@ -207,6 +207,7 @@
     <None Include="shaders\water_mesh_indices.comp" />
     <None Include="shaders\water_mesh_vertices.comp" />
     <None Include="shaders\windmap.comp" />
+    <None Include="shaders\_fragOutput.glsl" />
     <None Include="shaders\_vertex.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
