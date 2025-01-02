@@ -55,6 +55,13 @@ float ShadowCalculation()
 	return shadow;
 }
 
+float linearDepth(float depth)
+{
+	float nearPlane = 0.1f;
+	float farPlane = 300.0f;
+	float z = depth * 2.0f - 1.0f; 
+	return (2.0f * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));	
+}
 void main() {
 	vec3 viewDir    = normalize(inPlayerPos-inPos);
 	vec3 halfwayDir = normalize(-sceneData.sunlightDirection.xyz + viewDir);
@@ -75,6 +82,7 @@ void main() {
 	//outFragColor = vec4(light,1.0f);
 
 	outNormal = vec4(inNormal,1);
-	outPosition = sceneData.view * vec4(inPos,1);
+	//outPosition = sceneData.view * vec4(inPos,1);
+	outPosition = vec4((sceneData.view * vec4(inPos,1)).xyz,linearDepth(gl_FragCoord.z));
 	outSpecularMap = vec4(1);
 }

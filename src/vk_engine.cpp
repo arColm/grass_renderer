@@ -1174,7 +1174,7 @@ void VulkanEngine::initDescriptors()
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		builder.addBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		builder.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		builder.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		builder.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
@@ -1203,7 +1203,7 @@ void VulkanEngine::initDescriptors()
 	DescriptorWriter writer;
 	writer.writeImage(0, _finalDrawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.writeImage(1, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.writeImage(2, _depthImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+	writer.writeImage(2, _depthImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.writeImage(3, _normalsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.writeImage(4, _specularMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.writeImage(5, _positionsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
