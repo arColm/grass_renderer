@@ -7,11 +7,11 @@ layout (local_size_x = 16, local_size_y = 16) in;
 
 //todo jesus clean this up
 layout (rgba16f, set=1,binding=0) uniform image2D finalDrawImage;
-layout (rgba16f, set=1,binding=1) uniform image2D colorImage;
+layout (set=1,binding=1) uniform sampler2D colorImage;
 layout (set=1,binding=2) uniform sampler2D depthImage;
-layout (rgba16f, set=1,binding=3) uniform image2D normalImage;
-layout (rgba16f, set=1,binding=4) uniform image2D specularMapImage;
-layout (rgba16f, set=1,binding=5) uniform image2D positionImage;
+layout (set=1,binding=3) uniform sampler2D normalImage;
+layout (set=1,binding=4) uniform sampler2D specularMapImage;
+layout (set=1,binding=5) uniform sampler2D positionImage;
 
 //push constants block
 layout( push_constant ) uniform constants
@@ -43,44 +43,65 @@ vec3 normal_from_depth(float depth, vec2 uv) {
 
 // screen space reflections
 // based on https://lettier.github.io/3d-game-shaders-for-beginners/screen-space-reflection.html
-vec4 getReflectedColor(ivec2 texelCoord)
-{
+vec4 getReflectedColor(vec2 texCoord)
+{	
 	vec4 color = vec4(0);
 	int maxSteps = 30;
 	float maxDistance = 8;
-	float resolution = 0.3;
-	int steps = 5;
-	float thickness = 0.5;
+	float resolution = 0.7;
+	int steps = 8;
+	float thickness = 0.2;
 
-	vec2 texSize = imageSize(colorImage);
-
+	ivec2 texSize = textureSize(colorImage,0);
 	vec4 uv = vec4(0);
 
-	//vec4 startPos = vec4(2*vec2(texelCoord-0.5*texSize)/texSize,imageLoad(depthImage,texelCoord).r,1);///todo vector from camera to world position
-	vec4 startPos = vec4(imageLoad(positionImage,texelCoord).xyz,1);///todo vector from camera to world position
-	vec3 normalizedStartPos = normalize(startPos.xyz);
-	mat4 normalMatrix = transpose(inverse(sceneData.view));
-	vec3 normal = normalize((normalMatrix * imageLoad(normalImage,texelCoord)).xyz);//might have to normalize
-	//normal = normal_from_depth(imageLoad(depthImage,texelCoord).r,texelCoord);
-	vec3 pivot = normalize(reflect(normalizedStartPos,normal));
+	vec4 startPos = vec4(texture(positionImage,texCoord).xyz,1);///todo vector from camera to world position
+	//vec4 startPos = vec4(imageLoad(positionImage,texelCoord).xyz,1);///todo vector from camera to world position
+	startPos.z *= -1;
 
+	vec3 normalizedStartPos = normalize(startPos.xyz);
+
+	mat4 v = sceneData.view;
+	//v[3] = vec4(0,0,0,1);
+	//v[0].w = 0;
+	//v[1].w = 0;
+	//v[2].w = 0;
+	mat4 normalMatrix = transpose(inverse(v));
+	normalMatrix[3] = vec4(0,0,0,1);
+	normalMatrix[0].w = 0;
+	normalMatrix[1].w = 0;
+	normalMatrix[2].w = 0;
+
+
+	vec3 normal = (normalMatrix * texture(normalImage,texCoord)).xyz;//might have to normalize
+	//normal = normal_from_depth(texture(depthImage,vec2(texelCoord)/texSize).r,vec2(texelCoord)/texSize);
+	//normal.z = -normal.z;
+	//return vec4(vec3(abs(normal.z)),1);
+	//return vec4(vec3(startPos.z),1);
+	vec3 pivot = normalize(reflect(normalizedStartPos,normal));
+	//return vec4(vec3(pivot.g),1);
+	//return vec4(vec3(abs(pivot.g)),1);
 	vec4 nextPos = startPos;
 
 	vec4 startView = vec4(startPos.xyz + (pivot * 0.0),1.0);
 	vec4 endView = vec4(startPos.xyz + (pivot * maxDistance),1.0);
+	if(endView.z<=0.1) endView = vec4(0);
+	//return vec4(vec3(0.01*(endView.xyz-startView.xyz).y),1);
+	//return vec4(startView.xy,0,1);
 
 	//transform viewspace coords to screen space
-	vec4 startFrag = sceneData.proj * startView;
-	startFrag.xyz /= startFrag.w;
-	startFrag.xy = startFrag.xy * 0.5 + 0.5;
+	mat4 p = sceneData.proj;
+	vec4 startFrag = p * startView;
+	startFrag /= startFrag.w;
+	startFrag.xy = startFrag.xy * vec2(-0.5,-0.5) + 0.5;
 	startFrag.xy *= texSize;
-	vec4 endFrag = sceneData.proj * endView;
-	endFrag.xyz /= endFrag.w;
-	endFrag.xy = endFrag.xy * 0.5 + 0.5;
+	vec4 endFrag = p * endView;
+	endFrag /= endFrag.w;
+	endFrag.xy = endFrag.xy * vec2(-0.5,-0.5) + 0.5;
 	endFrag.xy *= texSize;
-	//return endFrag;
+	//return vec4((endFrag-startFrag).r,0,0,1);
 	vec2 frag = startFrag.xy;
-	uv.xy = frag/texSize;
+	//return imageLoad(colorImage,ivec2(endFrag.xy));
 
 	float dX = endFrag.x - startFrag.x;
 	float dY = endFrag.y - startFrag.y;
@@ -100,16 +121,20 @@ vec4 getReflectedColor(ivec2 texelCoord)
 	for(i=0;i<int(delta) && i < maxSteps;i++)
 	{
 		frag += increment;
-		uv.xy = frag/texSize;
-		//nextPos = vec4(uv.xy,imageLoad(depthImage,ivec2(uv.xy)).r,1);// todo
-		nextPos = vec4(imageLoad(positionImage,ivec2(uv.xy*texSize)).xyz,1);// todo
+		uv.xy = frag / texSize;
+		nextPos = vec4(texture(positionImage,uv.xy).xyz,1);// todo
+		//nextPos = vec4(imageLoad(positionImage,ivec2(uv.xy)).xyz,1);// todo
+		//nextPos.y *= -1;
+		nextPos.z = -nextPos.z;
+		//return vec4(nextPos.xyz,1);
 
+		
 
 		search1 = mix((frag.y-startFrag.y)/dY,(frag.x-startFrag.x)/dX,useX);
 		search1 = clamp(search1,0.0,1.0);
 
-		viewDistance = (startView.y * endView.y) / mix(endView.y,startView.y,search1);
-		depth = viewDistance - nextPos.y;
+		viewDistance = (startView.z * endView.z) / mix(endView.z,startView.z,search1);
+		depth = viewDistance - nextPos.z;
 
 		if(depth>0 && depth<thickness)
 		{
@@ -121,7 +146,7 @@ vec4 getReflectedColor(ivec2 texelCoord)
 			search0 = search1;
 		}
 	}
-	
+	//return vec4(hit0,0,0,1);
 	search1 = search0 + ((search1-search0)/2.0);
 
 	steps *= hit0;
@@ -129,12 +154,14 @@ vec4 getReflectedColor(ivec2 texelCoord)
 	for(i=0;i<steps && i < maxSteps;i++)
 	{
 		frag = mix(startFrag.xy,endFrag.xy,search1);
-		uv.xy = frag/texSize;
-		//nextPos = vec4(uv.xy,imageLoad(depthImage,ivec2(uv.xy)).r,1); //todo
-		nextPos = vec4(imageLoad(positionImage,ivec2(uv.xy*texSize)).xyz,1);// todo
+		uv.xy = frag / texSize;
+		nextPos = vec4(texture(positionImage,uv.xy).xyz,1); //todo
+		//nextPos = vec4(imageLoad(positionImage,ivec2(uv.xy)).xyz,1);// todo
+		//nextPos.y *= -1;
+		nextPos.z = -nextPos.z;
 
-		viewDistance = (startView.y * endView.y) / mix(endView.y, startView.y, search1);
-		depth = viewDistance - nextPos.y;
+		viewDistance = (startView.z * endView.z) / mix(endView.z, startView.z, search1);
+		depth = viewDistance - nextPos.z;
 
 		if(depth > 0 && depth < thickness)
 		{
@@ -149,7 +176,7 @@ vec4 getReflectedColor(ivec2 texelCoord)
 		}
 	}
 
-	float visibility = hit1 * nextPos.w * 
+	float visibility = hit1 *// nextPos.w * 
 		(1-max(dot(-normalizedStartPos,pivot),0)) *
 		(1-clamp(depth / thickness,0,1)) *
 		(1-clamp(length(nextPos-startPos)/maxDistance,0,1)) *
@@ -162,34 +189,35 @@ vec4 getReflectedColor(ivec2 texelCoord)
 	
 	if(visibility==0)
 	{
-		color = imageLoad(colorImage,ivec2(texelCoord));
+		color = texture(colorImage,texCoord);
 	}
 	else 
 	{
-		uv.y = 1.0-uv.y;
-		color = imageLoad(colorImage,ivec2(uv.xy*texSize));
+		uv.y = 1-uv.y;
+		color = texture(colorImage,uv.xy);
 	}
 
 	return color;
 }
 void main()
 {
-	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 size = imageSize(finalDrawImage);
+	vec2 size = textureSize(colorImage,0).xy;
+	vec2 texCoord = ivec2(gl_GlobalInvocationID.xy) / size;
+	ivec2 finalDrawSize = imageSize(finalDrawImage);
 
-	if(texelCoord.x < size.x && texelCoord.y < size.y)
+	if(texCoord.x < size.x && texCoord.y < size.y)
 	{
-		vec4 color = imageLoad(colorImage, texelCoord);
-		float depth = texture(depthImage, vec2(texelCoord)/size).r;
-		vec4 normal = imageLoad(normalImage, texelCoord);
-		vec4 specular = imageLoad(specularMapImage,texelCoord);
+		vec4 color = texture(colorImage, texCoord);
+		float depth = texture(depthImage, vec2(texCoord)).r;
+		vec4 normal = texture(normalImage, texCoord);
+		vec4 specular = texture(specularMapImage,texCoord);
 
 		vec4 finalColor = color;
 		if(specular.r>0)
 		{
-			finalColor = getReflectedColor(texelCoord);
+			finalColor = getReflectedColor(texCoord);
 		}
 
-		imageStore(finalDrawImage, texelCoord, finalColor);
+		imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), finalColor);
 	}
 }

@@ -371,7 +371,6 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _cloudMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _cloudMesh->surfaces[0].count, 1, _cloudMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _cloudMesh->surfaces[0].count / 3 * 1;
-
 	//draw mesh
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
@@ -392,6 +391,13 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += testMeshes[2]->surfaces[0].count / 3 * 1;
 
+	//
+	pushConstants.worldMatrix = glm::translate(glm::vec3(3, 3, 3));
+	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+	UI_triangleCount += _cloudMesh->surfaces[0].count / 3 * 1;
+	//
+	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 
 	//draw ground
 	pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
@@ -960,6 +966,7 @@ void VulkanEngine::initSwapchain()
 	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;		//can copy to image
 	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
 	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;	//allows us to draw geometry on it through graphics pipeline
+	drawImageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT; //allows image to be sampled (for deferred shading)
 
 	//allocate draw image from gpu memory
 	VmaAllocationCreateInfo rimgAllocInfo{};
@@ -1173,11 +1180,11 @@ void VulkanEngine::initDescriptors()
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		builder.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		builder.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		builder.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.addBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	{
@@ -1202,11 +1209,11 @@ void VulkanEngine::initDescriptors()
 
 	DescriptorWriter writer;
 	writer.writeImage(0, _finalDrawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.writeImage(1, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(1, _drawImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.writeImage(2, _depthImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	writer.writeImage(3, _normalsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.writeImage(4, _specularMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.writeImage(5, _positionsImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.writeImage(3, _normalsImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.writeImage(4, _specularMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.writeImage(5, _positionsImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.updateSet(_device, _drawImageDescriptors);
 
 	//frame descriptors

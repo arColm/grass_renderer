@@ -81,6 +81,6 @@ void main() {
 	color = mix(sunFragColor,horizonFragColor,0.2);
 	outFragColor = color;
 	outNormal = vec4(-normalizedPos,1);
-	outPosition = sceneData.view * vec4(inPosition,1);
+	outPosition = sceneData.view * vec4(inPosition*300,1);
 	outSpecularMap = vec4(0);
 }
