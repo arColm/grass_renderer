@@ -46,13 +46,13 @@ vec3 normal_from_depth(float depth, vec2 uv) {
 vec4 getReflectedColor(vec2 texCoord)
 {	
 	vec4 color = vec4(0);
-	int maxSteps = 30;
-	float maxDistance = 8;
-	float resolution = 0.7;
-	int steps = 8;
+	int maxSteps = 100;
+	float maxDistance = 238;
+	float resolution = 1.0;
+	int steps = 28;
 	float thickness = 0.2;
 
-	ivec2 texSize = textureSize(colorImage,0);
+	ivec2 texSize = textureSize(colorImage,0).xy;
 	vec4 uv = vec4(0);
 
 	vec4 startPos = vec4(texture(positionImage,texCoord).xyz,1);///todo vector from camera to world position
@@ -61,26 +61,18 @@ vec4 getReflectedColor(vec2 texCoord)
 
 	vec3 normalizedStartPos = normalize(startPos.xyz);
 
-	mat4 v = sceneData.view;
+	mat3 v = mat3(sceneData.view);
 	//v[3] = vec4(0,0,0,1);
 	//v[0].w = 0;
 	//v[1].w = 0;
 	//v[2].w = 0;
-	mat4 normalMatrix = transpose(inverse(v));
-	normalMatrix[3] = vec4(0,0,0,1);
-	normalMatrix[0].w = 0;
-	normalMatrix[1].w = 0;
-	normalMatrix[2].w = 0;
+	mat3 normalMatrix = transpose(inverse(v));
 
 
-	vec3 normal = (normalMatrix * texture(normalImage,texCoord)).xyz;//might have to normalize
+	vec3 normal = normalize((normalMatrix * texture(normalImage,texCoord).xyz).xyz);//might have to normalize
+	normal.z *= -1;
 	//normal = normal_from_depth(texture(depthImage,vec2(texelCoord)/texSize).r,vec2(texelCoord)/texSize);
-	//normal.z = -normal.z;
-	//return vec4(vec3(abs(normal.z)),1);
-	//return vec4(vec3(startPos.z),1);
 	vec3 pivot = normalize(reflect(normalizedStartPos,normal));
-	//return vec4(vec3(pivot.g),1);
-	//return vec4(vec3(abs(pivot.g)),1);
 	vec4 nextPos = startPos;
 
 	vec4 startView = vec4(startPos.xyz + (pivot * 0.0),1.0);
@@ -98,10 +90,10 @@ vec4 getReflectedColor(vec2 texCoord)
 	vec4 endFrag = p * endView;
 	endFrag /= endFrag.w;
 	endFrag.xy = endFrag.xy * vec2(-0.5,-0.5) + 0.5;
+	//return texture(colorImage,clamp(vec2(endFrag.xy),0,1));
 	endFrag.xy *= texSize;
 	//return vec4((endFrag-startFrag).r,0,0,1);
 	vec2 frag = startFrag.xy;
-	//return imageLoad(colorImage,ivec2(endFrag.xy));
 
 	float dX = endFrag.x - startFrag.x;
 	float dY = endFrag.y - startFrag.y;
@@ -176,7 +168,7 @@ vec4 getReflectedColor(vec2 texCoord)
 		}
 	}
 
-	float visibility = hit1 *// nextPos.w * 
+	float visibility = hit1 * nextPos.w * startPos.w *
 		(1-max(dot(-normalizedStartPos,pivot),0)) *
 		(1-clamp(depth / thickness,0,1)) *
 		(1-clamp(length(nextPos-startPos)/maxDistance,0,1)) *
@@ -187,18 +179,19 @@ vec4 getReflectedColor(vec2 texCoord)
 	uv.zw = vec2(visibility);
 	//return uv;
 	
-	if(visibility==0)
+	if(visibility<0.5)
 	{
 		color = texture(colorImage,texCoord);
 	}
 	else 
 	{
-		uv.y = 1-uv.y;
+		//uv.y = 1-uv.y;
 		color = texture(colorImage,uv.xy);
 	}
 
 	return color;
 }
+
 void main()
 {
 	vec2 size = textureSize(colorImage,0).xy;
