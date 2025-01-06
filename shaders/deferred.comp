@@ -48,7 +48,7 @@ vec3 normal_from_depth(float depth, vec2 uv) {
 vec4 getReflectedColor(vec2 texCoord)
 {	
 	vec4 color = vec4(0);
-	int maxSteps = 500;
+	int maxSteps = 100;
 	float maxDistance = 238;
 	float resolution = 1.0;
 	int steps = 28;
@@ -74,7 +74,7 @@ vec4 getReflectedColor(vec2 texCoord)
 	vec3 normal = normalize(normalMatrix * texture(normalImage,texCoord).xyz);//might have to normalize
 	normal.z *= -1;
 	vec2 jitter = (hash(startPos.xy)+1)*0.5;
-	normal.xz += jitter*0.05;
+	normal.xz += jitter*0.01;
 	normal = normalize(normal);
 	//normal = normal_from_depth(texture(depthImage,vec2(texelCoord)/texSize).r,vec2(texelCoord)/texSize);
 	vec3 pivot = normalize(reflect(normalizedStartPos,normal));
@@ -202,7 +202,11 @@ vec4 getReflectedColor(vec2 texCoord)
 		if(uv.x<0 || uv.x >1 || uv.y < 0 || uv.y > 1)
 			color = texture(colorImage,texCoord);
 		else
+		{	
+			vec4 regColor = texture(colorImage,texCoord);
 			color = texture(colorImage,uv.xy);
+			color = mix(regColor,color,clamp(1-6*dot(uv.xy-vec2(0.5),uv.xy-vec2(0.5)),0,1));
+		}
 	}
 	else 
 	{
@@ -217,15 +221,16 @@ vec4 getReflectedColor(vec2 texCoord)
 //	to determine the coefficients into reflection strength
 float fresnelSchlick(vec2 texCoord)
 {
-	vec3 normal = normalize(texture(normalImage,texCoord).xyz);
+	mat3 v = mat3(sceneData.view);
+	mat3 normalMatrix = transpose(inverse(v));
+	vec3 normal = normalize(normalMatrix*normalize(texture(normalImage,texCoord).xyz));
 	vec3 position = normalize(texture(positionImage,texCoord).xyz);
-	normal.z = -normal.z;
-	position.z = -position.z;
+	normal.z = normal.z;
+	position.z = position.z;
 
-	float cosTheta = max(dot(normal.xyz,position.xyz),0);
+	float cosTheta = max(-dot(normal.xyz,position.xyz),0);
 
-	const float R0 = 0.04;
-
+	const float R0 = 0.6;
 	return R0 + (1.0-R0)*pow(1.0-cosTheta,5.0);
 }
 
@@ -239,7 +244,9 @@ void main()
 	{
 		vec4 color = texture(colorImage, texCoord);
 		float depth = texture(depthImage, vec2(texCoord)).r;
-		vec4 normal = texture(normalImage, texCoord);
+		mat3 v = mat3(sceneData.view); //todo put this in scene data or smth
+		mat3 normalMatrix = transpose(inverse(v));
+		vec3 normal = normalize(normalMatrix*normalize(texture(normalImage, texCoord).xyz));
 		vec4 specular = texture(specularMapImage,texCoord);
 		vec4 position = texture(positionImage,texCoord);
 		normal.z = -normal.z;
@@ -251,10 +258,16 @@ void main()
 			vec4 reflectedColor = getReflectedColor(texCoord);
 			float fresnelCoefficient = fresnelSchlick(texCoord);
 			vec3 reflected = normalize(reflect(normalize(position.xyz), normalize(normal.xyz)));
-			float ReflectionMultiplier = pow(0.5, 3.0) * 
-                //screenEdgefactor * 
+ 
+			vec2 dCoords = smoothstep(0.2, 0.6, abs(vec2(0.5, 0.5) - texCoord.xy));
+ 
+ 
+			float screenEdgefactor = clamp(1.0 - (dCoords.x + dCoords.y), 0.0, 1.0);
+			float ReflectionMultiplier = pow(1.0, 3.0) * 
+                screenEdgefactor * 
                 reflected.z;
-			finalColor = reflectedColor * fresnelCoefficient * clamp(ReflectionMultiplier, 0.0, 0.9);
+			finalColor = mix(color,reflectedColor * clamp(ReflectionMultiplier, 0.0, 1.0),fresnelCoefficient);
+			//finalColor = vec4(fresnelCoefficient,0,0,1);
 		}
 
 		imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), finalColor);
