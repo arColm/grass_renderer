@@ -49,6 +49,50 @@ float draineMiePhase(float cosTheta)
 {
     return mix (DrainePHG (0.8, 2, cosTheta), DrainePHG (-0.5, 2, cosTheta), 0.5);
 }
+
+#include "noise.glsl"
+//uses voronoi noise from https://thebookofshaders.com/12/
+vec4 starColor(float cosTheta, float cosPhi)
+{
+	vec2 i = vec2(floor(cosTheta),floor(cosPhi));
+	vec2 f = vec2(fract(cosTheta),fract(cosPhi));
+	
+    float m_dist = 1.;  // minimum distance
+
+	for (int y= -1; y <= 1; y++) 
+	{
+		for (int x= -1; x <= 1; x++) 
+		{
+			// Neighbor place in the grid
+			vec2 neighbor = vec2(float(x),float(y));
+
+			// Random position from current + neighbor place in the grid
+			vec2 point = hash(i + neighbor);
+
+			// Animate the point
+			//point = 0.5 + 0.5*sin(u_time + 6.2831*point);
+			point = 0.5 + 0.5*sin(6.2831*point);
+
+			// Vector between the pixel and the point
+			vec2 diff = neighbor + point - f;
+
+			// Distance to the point
+			float dist = length(diff);
+
+			// Keep the closer distance
+			m_dist = min(m_dist, dist);
+        }
+    }
+	vec3 color = vec3(0);
+    // Draw the min distance (distance field)
+    //color += m_dist;
+
+    // Draw cell center
+    color += 1.-step(.02, m_dist);
+
+	return vec4(color,1);
+}
+
 void main() {
 	//vec3 topColor = vec3(0.906,0.984,0.988);
 	//vec3 bottomColor = vec3(0.988,0.78,0.408);
@@ -70,15 +114,29 @@ void main() {
 	vec3 normalizedPos = normalize(inPosition);
 	float normalizedHeight = (normalizedPos.y+1)*0.5;
 
-	float cosTheta = dot(normalizedPos,normalizedSunPos);
+	float sunCosTheta = dot(normalizedPos,normalizedSunPos);
 	//sky color
 	vec4 color = vec4(mix(bottomColor,topColor,normalizedHeight), 1.0f);
 	//sun color
-	vec4 sunFragColor = mix(color,vec4(sunColor,1.0f),miePhase(max(0,cosTheta)));
+	vec4 sunFragColor = mix(color,vec4(sunColor,1.0f),miePhase(max(0,sunCosTheta)));
 	//horizon color
 	vec4 horizonFragColor = mix(color, vec4(sunColor ,1.0f), mix(0,miePhase(1-max(0,normalizedPos.y)),0.7-abs(normalizedSunPos.y)));
 
+	//MOON
+	vec3 normalizedMoonPos = vec3(-normalizedSunPos.xy,normalizedSunPos.z);
+	vec3 moonColor = mix(vec3(0.294,0.294,0.322),vec3(0.784,0.769,0.969),pow(abs(normalizedMoonPos.y),2)+0.3);
+	float moonCosTheta = dot(normalizedPos,normalizedMoonPos);
+	
+	vec4 moonFragColor = mix(color,vec4(moonColor,1.0f),miePhase(max(0,moonCosTheta)));
+
+	//STARS
+	float cosTheta = normalizedPos.z;
+	float cosPhi = sign(normalizedPos.y)*normalizedPos.x/length(normalizedPos.xy+0.4) + sceneData.time.x*0.03;//max(sign(normalizedPos.y),1);
+
+
 	color = mix(sunFragColor,horizonFragColor,0.2);
+	color += mix(vec4(0),starColor(cosTheta*40,cosPhi*40),clamp(normalizedMoonPos.y*2,0,1));
+	color = mix(color,moonFragColor,max(normalizedMoonPos.y,0));
 	outFragColor = color;
 	outNormal = vec4(-normalizedPos,1);
 	outPosition = sceneData.view * vec4(inPosition*300,1);

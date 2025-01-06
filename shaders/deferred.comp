@@ -269,7 +269,9 @@ void main()
 			finalColor = mix(color,reflectedColor * clamp(ReflectionMultiplier, 0.0, 1.0),fresnelCoefficient);
 			//finalColor = vec4(fresnelCoefficient,0,0,1);
 		}
-
-		imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), finalColor);
+		//if(gl_GlobalInvocationID.x%4>=2 &&gl_GlobalInvocationID.y % 4<2)
+			imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), finalColor);
+		//else
+		//	imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), vec4(0,0,0,1));
 	}
 }
