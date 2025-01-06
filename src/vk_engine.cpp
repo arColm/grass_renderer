@@ -1713,7 +1713,7 @@ void VulkanEngine::initSceneData()
 			glm::radians(70.f),
 			(float)_windowExtent.width / (float)_windowExtent.height,
 			//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
-			0.1f, 300.f);
+			0.1f, 600.f);
 	_sceneData.proj[1][1] *= -1;
 
 	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);
@@ -2882,10 +2882,10 @@ void VulkanEngine::initClouds()
 	MeshAsset meshAsset{};
 
 	const std::vector<glm::vec4> vertices{
-		glm::vec4(-RENDER_DISTANCE, 50.9f, -RENDER_DISTANCE ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 50.9f, -RENDER_DISTANCE ,1.0f),
-		glm::vec4(-RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f)
+		glm::vec4(-RENDER_DISTANCE * 2, 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(-RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f)
 	};
 	const std::vector<uint32_t> indices({
 		0,1,2,

@@ -13,7 +13,7 @@ layout (location = 1) in vec3 inPlayerPos;
 #include "_fragOutput.glsl"
 
 // inspired by https://www.shadertoy.com/view/4tdSWr
-
+// using a similar concept of 4 layers of noise and adding to obtain opacity
 void main() {
     vec2 uv = inPosition.xz * 0.02 +vec2(sceneData.time.x)*0.2;
 

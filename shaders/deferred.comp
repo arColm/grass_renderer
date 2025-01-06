@@ -5,6 +5,8 @@ layout (local_size_x = 16, local_size_y = 16) in;
 
 #include "0_scene_data.glsl"
 
+#include "noise.glsl"
+
 //todo jesus clean this up
 layout (rgba16f, set=1,binding=0) uniform image2D finalDrawImage;
 layout (set=1,binding=1) uniform sampler2D colorImage;
@@ -46,11 +48,11 @@ vec3 normal_from_depth(float depth, vec2 uv) {
 vec4 getReflectedColor(vec2 texCoord)
 {	
 	vec4 color = vec4(0);
-	int maxSteps = 100;
+	int maxSteps = 500;
 	float maxDistance = 238;
 	float resolution = 1.0;
 	int steps = 28;
-	float thickness = 0.2;
+	float thickness = 0.3;
 
 	ivec2 texSize = textureSize(colorImage,0).xy;
 	vec4 uv = vec4(0);
@@ -69,17 +71,21 @@ vec4 getReflectedColor(vec2 texCoord)
 	mat3 normalMatrix = transpose(inverse(v));
 
 
-	vec3 normal = normalize((normalMatrix * texture(normalImage,texCoord).xyz).xyz);//might have to normalize
+	vec3 normal = normalize(normalMatrix * texture(normalImage,texCoord).xyz);//might have to normalize
 	normal.z *= -1;
+	vec2 jitter = (hash(startPos.xy)+1)*0.5;
+	normal.xz += jitter*0.05;
+	normal = normalize(normal);
 	//normal = normal_from_depth(texture(depthImage,vec2(texelCoord)/texSize).r,vec2(texelCoord)/texSize);
 	vec3 pivot = normalize(reflect(normalizedStartPos,normal));
 	vec4 nextPos = startPos;
 
 	vec4 startView = vec4(startPos.xyz + (pivot * 0.0),1.0);
 	vec4 endView = vec4(startPos.xyz + (pivot * maxDistance),1.0);
-	if(endView.z<=0.1) endView = vec4(0);
+	if(endView.z<=0.1) return texture(colorImage,texCoord);
 	//return vec4(vec3(0.01*(endView.xyz-startView.xyz).y),1);
 	//return vec4(startView.xy,0,1);
+	//return vec4(endView.z,0,0,1);
 
 	//transform viewspace coords to screen space
 	mat4 p = sceneData.proj;
@@ -90,7 +96,6 @@ vec4 getReflectedColor(vec2 texCoord)
 	vec4 endFrag = p * endView;
 	endFrag /= endFrag.w;
 	endFrag.xy = endFrag.xy * vec2(-0.5,-0.5) + 0.5;
-	//return texture(colorImage,clamp(vec2(endFrag.xy),0,1));
 	endFrag.xy *= texSize;
 	//return vec4((endFrag-startFrag).r,0,0,1);
 	vec2 frag = startFrag.xy;
@@ -99,6 +104,7 @@ vec4 getReflectedColor(vec2 texCoord)
 	float dY = endFrag.y - startFrag.y;
 	float useX = abs(dX)>=abs(dY)? 1.0 : 0.0;
 	float delta = mix(abs(dY),abs(dX),useX) * clamp(resolution,0.0,1.0);
+	delta = min(delta,maxSteps);
 	vec2 increment = vec2(dX,dY) / max(delta,0.001);
 
 	float search0 = 0;
@@ -128,11 +134,16 @@ vec4 getReflectedColor(vec2 texCoord)
 		viewDistance = (startView.z * endView.z) / mix(endView.z,startView.z,search1);
 		depth = viewDistance - nextPos.z;
 
-		if(depth>0 && depth<thickness)
+		if((depth>0 && depth<thickness))
 		{
 			hit0 = 1;
 			break;
 		}
+		//else if(nextPos.z >=600 && uv.x >0 && uv.x < 1 && uv.y >0 && uv.y<1)
+		//{
+			//hit0 = 1;
+			//break;
+		//}
 		else
 		{
 			search0 = search1;
@@ -155,11 +166,17 @@ vec4 getReflectedColor(vec2 texCoord)
 		viewDistance = (startView.z * endView.z) / mix(endView.z, startView.z, search1);
 		depth = viewDistance - nextPos.z;
 
-		if(depth > 0 && depth < thickness)
+		if((depth > 0 && depth < thickness))
 		{
 			hit1 = 1;
 			search1 = search0 + ((search1-search0)/2);
-		}
+		}		
+		//else if(nextPos.z >=600 && uv.x >0 && uv.x < 1 && uv.y >0 && uv.y<1)
+		//{
+			//hit1 = 1;
+			//search1 = search0 + ((search1-search0)/2);
+			//break;
+		//}
 		else
 		{
 			float temp = search1;
@@ -181,7 +198,11 @@ vec4 getReflectedColor(vec2 texCoord)
 	
 	if(visibility<0.5)
 	{
-		color = texture(colorImage,texCoord);
+		uv.xy = vec2(endFrag.xy)/texSize;
+		if(uv.x<0 || uv.x >1 || uv.y < 0 || uv.y > 1)
+			color = texture(colorImage,texCoord);
+		else
+			color = texture(colorImage,uv.xy);
 	}
 	else 
 	{
@@ -190,6 +211,22 @@ vec4 getReflectedColor(vec2 texCoord)
 	}
 
 	return color;
+}
+
+// inspired from https://imanolfotia.com/blog/1
+//	to determine the coefficients into reflection strength
+float fresnelSchlick(vec2 texCoord)
+{
+	vec3 normal = normalize(texture(normalImage,texCoord).xyz);
+	vec3 position = normalize(texture(positionImage,texCoord).xyz);
+	normal.z = -normal.z;
+	position.z = -position.z;
+
+	float cosTheta = max(dot(normal.xyz,position.xyz),0);
+
+	const float R0 = 0.04;
+
+	return R0 + (1.0-R0)*pow(1.0-cosTheta,5.0);
 }
 
 void main()
@@ -204,11 +241,20 @@ void main()
 		float depth = texture(depthImage, vec2(texCoord)).r;
 		vec4 normal = texture(normalImage, texCoord);
 		vec4 specular = texture(specularMapImage,texCoord);
+		vec4 position = texture(positionImage,texCoord);
+		normal.z = -normal.z;
+		position.z = -position.z;
 
 		vec4 finalColor = color;
 		if(specular.r>0)
 		{
-			finalColor = getReflectedColor(texCoord);
+			vec4 reflectedColor = getReflectedColor(texCoord);
+			float fresnelCoefficient = fresnelSchlick(texCoord);
+			vec3 reflected = normalize(reflect(normalize(position.xyz), normalize(normal.xyz)));
+			float ReflectionMultiplier = pow(0.5, 3.0) * 
+                //screenEdgefactor * 
+                reflected.z;
+			finalColor = reflectedColor * fresnelCoefficient * clamp(ReflectionMultiplier, 0.0, 0.9);
 		}
 
 		imageStore(finalDrawImage, ivec2(texCoord*finalDrawSize), finalColor);
