@@ -1,5 +1,5 @@
 
-![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/1.jpg))
+![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/1.png))
 
 # Overview
 Vulkan-based renderer with a focus on grass. However it also features:
@@ -13,9 +13,9 @@ Vulkan-based renderer with a focus on grass. However it also features:
 A preview of the engine can be seen here:
 https://www.youtube.com/watch?v=ms9te2xd34Q
 
-![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/2.jpg))
+![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/2.png))
 
-![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/3.jpg))
+![alt text]([http://url/to/img.png](https://github.com/arColm/grass_renderer/tree/master/assets/images/3.png))
 
 
 # Dependencies
