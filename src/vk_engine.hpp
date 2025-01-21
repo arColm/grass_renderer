@@ -237,6 +237,13 @@ public:
 	VkPipeline _skyboxPipeline; 
 
 	//clouds
+	static const int CLOUD_MAP_SIZE = 1024;
+	static const int CLOUD_MAP_HEIGHT = 128;
+	AllocatedImage _cloudMapImage;
+	VkDescriptorSet _cloudMapDescriptorSet;
+	VkDescriptorSetLayout _cloudMapDescriptorLayout;
+	VkPipelineLayout _cloudMapComputePipelineLayout;
+	VkPipeline _cloudMapComputePipeline;
 	std::shared_ptr<MeshAsset> _cloudMesh;
 	VkPipelineLayout _cloudPipelineLayout;
 	VkPipeline _cloudPipeline;

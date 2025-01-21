@@ -5,6 +5,9 @@
 
 #include "0_scene_data.glsl"
 #include "noise.glsl"
+
+layout(rgba16f, set = 1, binding = 0) uniform image3D cloudMap;
+
 float PI = 3.1415926;
 
 layout (location = 0) in vec3 inPosition;
@@ -32,7 +35,8 @@ void main() {
 
 
 
-	outFragColor = vec4(1,1,1,opacity);
+	//outFragColor = vec4(1,1,1,opacity);
+	outFragColor = vec4(fract(inPosition),opacity);
     outNormal = vec4(0,-1,0,1);
 	outPosition = sceneData.view * vec4(inPosition,1);
 	outSpecularMap = vec4(0);

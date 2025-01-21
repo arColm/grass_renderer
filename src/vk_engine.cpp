@@ -2880,7 +2880,129 @@ void VulkanEngine::initSkybox()
 
 void VulkanEngine::initClouds()
 {
+	/*
+	*  WORLEY NOISE
+	*/
 
+	VkExtent3D imageExtent = {
+		CLOUD_MAP_SIZE,
+		CLOUD_MAP_HEIGHT,
+		CLOUD_MAP_SIZE,
+	};
+
+	//hardcoding draw format to 32 bit float
+	_cloudMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_cloudMapImage.imageExtent = imageExtent;
+
+	VkImageUsageFlags imageUsageFlags{};
+	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_cloudMapImage.imageFormat, imageUsageFlags, imageExtent);
+
+	//allocate draw image from gpu memory
+	VmaAllocationCreateInfo imgAllocInfo{};
+	imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+	//allocate and create image
+	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_cloudMapImage.image, &_cloudMapImage.allocation, nullptr);
+
+	//build image view for the draw image to use for rendering
+	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_cloudMapImage.imageFormat, _cloudMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_cloudMapImage.imageView));
+
+	//add to deletion queues
+	_mainDeletionQueue.pushFunction(
+		[=]() {
+			vkDestroyImageView(_device, _cloudMapImage.imageView, nullptr);
+			vmaDestroyImage(_allocator, _cloudMapImage.image, _cloudMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+		});
+
+
+	// DESCRIPTORS
+	//	descriptor layout
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		_cloudMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
+	{
+		//	writing to descriptor set
+		_cloudMapDescriptorSet = _globalDescriptorAllocator.allocate(_device, _cloudMapDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _cloudMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.updateSet(_device, _cloudMapDescriptorSet);
+	}
+
+
+	//	PIPELINE
+	VkShaderModule computeShader;
+	if (!vkutil::loadShaderModule("./shaders/cloudmap.comp.spv", _device, &computeShader))
+	{
+		fmt::print("error when building cloudmap compute shader module\n");
+	}
+	else
+	{
+		fmt::print("cloudmap compute shader loaded\n");
+	}
+
+	//push constant range
+	//VkPushConstantRange computeBufferRange{};
+	//computeBufferRange.offset = 0;
+	//computeBufferRange.size = sizeof(ComputePushConstants);
+	//computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	//sets
+
+	//build pipeline layout that controls the input/outputs of shader
+	//	note: no descriptor sets or other yet.
+	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
+	//computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	//computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	computePipelineLayoutInfo.setLayoutCount = 1;
+	computePipelineLayoutInfo.pSetLayouts = &_cloudMapDescriptorLayout;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computePipelineLayoutInfo, nullptr, &_cloudMapComputePipelineLayout));
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.pName = "main"; //name of entrypoint function
+	stageInfo.module = computeShader;
+
+	//create pipelines
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _cloudMapComputePipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_cloudMapComputePipeline));
+
+	//clean structures
+	vkDestroyShaderModule(_device, computeShader, nullptr);
+
+	_mainDeletionQueue.pushFunction([&]() {
+		vkDestroyPipelineLayout(_device, _cloudMapComputePipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _cloudMapComputePipeline, nullptr);
+		});
+
+	immediateSubmit(
+		[&](VkCommandBuffer cmd) {
+			vkutil::transitionImage(cmd, _cloudMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipeline);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
+			vkCmdDispatch(cmd, std::ceil(HEIGHT_MAP_SIZE / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 16.0f), std::ceil(CLOUD_MAP_SIZE / 16.0f));
+		}
+	);
+
+
+	/*
+	*  CLOUD MESH
+	*/
 	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
 
@@ -2888,11 +3010,31 @@ void VulkanEngine::initClouds()
 		glm::vec4(-RENDER_DISTANCE * 2, 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
 		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
 		glm::vec4(-RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f)
+		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f),
+
+		glm::vec4(-RENDER_DISTANCE * 2, 80.9f, -RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(RENDER_DISTANCE * 2 , 80.9f, -RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(-RENDER_DISTANCE * 2 , 80.9f, RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(RENDER_DISTANCE * 2 , 80.9f, RENDER_DISTANCE * 2 ,1.0f)
 	};
 	const std::vector<uint32_t> indices({
 		0,1,2,
-		1,3,2
+		1,3,2,
+
+		4,5,6,
+		5,7,6,
+
+		0,4,1,
+		4,5,1,
+
+		0,4,2,
+		4,5,2,
+
+		3,7,1,
+		7,1,5,
+
+		3,7,2,
+		7,2,6
 		});
 
 	const size_t vertexBufferSize = vertices.size() * sizeof(glm::vec4);
@@ -2995,13 +3137,17 @@ void VulkanEngine::initClouds()
 	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	//sets
+	VkDescriptorSetLayout layouts[] = {
+		_sceneDataDescriptorLayout,
+		_cloudMapDescriptorLayout
+	};
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
 	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &_sceneDataDescriptorLayout;
+	pipelineLayoutInfo.setLayoutCount = 2;
+	pipelineLayoutInfo.pSetLayouts = layouts;
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_cloudPipelineLayout));
 
