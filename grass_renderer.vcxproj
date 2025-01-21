@@ -187,6 +187,7 @@
     <None Include="shaders\0_scene_data.glsl" />
     <None Include="shaders\cloud.frag" />
     <None Include="shaders\cloud.vert" />
+    <None Include="shaders\cloudmap.comp" />
     <None Include="shaders\deferred.comp" />
     <None Include="shaders\gradient.comp" />
     <None Include="shaders\gradient_color.comp" />

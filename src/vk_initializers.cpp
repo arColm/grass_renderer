@@ -109,13 +109,14 @@ VkSubmitInfo2 vkinit::submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubm
 	return info;
 }
 
-VkImageCreateInfo vkinit::imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent)
+VkImageCreateInfo vkinit::imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, 
+	VkImageType imageType /* = VK_IMAGE_TYPE_2D*/)
 {
 	VkImageCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	info.pNext = nullptr;
 
-	info.imageType = VK_IMAGE_TYPE_2D;
+	info.imageType = imageType;
 
 	info.format = format;
 	info.extent = extent;
@@ -132,13 +133,14 @@ VkImageCreateInfo vkinit::imageCreateInfo(VkFormat format, VkImageUsageFlags usa
 	return info;
 }
 
-VkImageViewCreateInfo vkinit::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags)
+VkImageViewCreateInfo vkinit::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags,
+	VkImageViewType viewType /* = VK_IMAGE_VIEW_TYPE_2D*/)
 {
 	VkImageViewCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	info.pNext = nullptr;
 
-	info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	info.viewType = viewType;
 	info.image = image;
 	info.format = format;
 	info.subresourceRange.baseMipLevel = 0;

@@ -6,7 +6,7 @@
 #include "0_scene_data.glsl"
 #include "noise.glsl"
 
-layout(rgba16f, set = 1, binding = 0) uniform image3D cloudMap;
+layout(rgba16f, set = 1, binding = 0) readonly uniform image3D cloudMap;
 
 float PI = 3.1415926;
 
@@ -15,9 +15,61 @@ layout (location = 1) in vec3 inPlayerPos;
 
 #include "_fragOutput.glsl"
 
-// inspired by https://www.shadertoy.com/view/4tdSWr
-// using a similar concept of 4 layers of noise and adding to obtain opacity
-void main() {
+//inspired from https://github.com/SebLague/Clouds
+vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir)
+{
+    vec3 t0 = (boundsMin - rayOrigin) / rayDir;
+    vec3 t1 = (boundsMax - rayOrigin) / rayDir;
+
+    vec3 tmin = min(t0,t1);
+    vec3 tmax = max(t0,t1);
+
+    float dstA = max(max(tmin.x,tmin.y),tmin.z);
+    float dstB = min(min(tmax.x,tmax.y),tmax.z);
+
+    float dstToBox = max(0,dstA);
+    float dstInsideBox = max(0,dstB - dstToBox);
+    return vec2(dstToBox, dstInsideBox);
+}
+
+//TODO : currently hard coded
+const vec3 BOX_BOUNDS_MIN = vec3(-1200,50.9,-1200);
+const vec3 BOX_BOUNDS_MAX = vec3(1200,80.9,1200);
+
+float sampleDensity(vec3 pos)
+{
+    const vec3 size = imageSize(cloudMap);
+    return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
+}
+
+float getCloudDensity(vec3 raySrc, vec3 rayHit, int resolution)
+{
+    float density = 0;
+    vec3 rayDir = normalize(rayHit-raySrc);
+
+    vec2 boxIntersectInfo = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,rayDir);
+    float dstToBox = boxIntersectInfo.x;
+    float dstInsideBox = boxIntersectInfo.y;
+
+    float distanceTravelled = 0;
+    float stepSize = dstInsideBox / resolution;
+
+    if(dstToBox==0) return 0;
+
+    for(int i = 0; i<resolution;i++)
+    {
+        vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
+        density += sampleDensity(pos)/resolution;
+        distanceTravelled += stepSize;
+    }
+
+
+
+    return density;
+}
+
+float fbmClouds()
+{
     vec2 uv = inPosition.xz * 0.02 +vec2(sceneData.time.x)*0.2;
 
     float n = fbm(uv+sceneData.time.y,5,1.0,0.4,1.0,0.6);
@@ -31,12 +83,15 @@ void main() {
     float opacity = mix(0,n,clamp(n+m,0,1));
     
     opacity = mix(0,opacity,3*(gl_FragCoord.z*0.1));
+    return opacity;
+}
+// inspired by https://www.shadertoy.com/view/4tdSWr
+// using a similar concept of 4 layers of noise and adding to obtain opacity
+void main() {
+    
+    float cloud = getCloudDensity(inPlayerPos,inPosition,10);
 
-
-
-
-	//outFragColor = vec4(1,1,1,opacity);
-	outFragColor = vec4(fract(inPosition),opacity);
+	outFragColor = vec4(1,1,1,cloud);
     outNormal = vec4(0,-1,0,1);
 	outPosition = sceneData.view * vec4(inPosition,1);
 	outSpecularMap = vec4(0);

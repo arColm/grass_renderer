@@ -365,6 +365,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	UI_triangleCount += _skyboxMesh->surfaces[0].count / 3 * 1;
 	//draw clouds
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapDescriptorSet, 0, nullptr);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
 	//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
@@ -2898,7 +2899,7 @@ void VulkanEngine::initClouds()
 	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
 	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_cloudMapImage.imageFormat, imageUsageFlags, imageExtent);
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_cloudMapImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_3D);
 
 	//allocate draw image from gpu memory
 	VmaAllocationCreateInfo imgAllocInfo{};
@@ -2909,7 +2910,7 @@ void VulkanEngine::initClouds()
 	vmaCreateImage(_allocator, &imgInfo, &imgAllocInfo, &_cloudMapImage.image, &_cloudMapImage.allocation, nullptr);
 
 	//build image view for the draw image to use for rendering
-	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_cloudMapImage.imageFormat, _cloudMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_cloudMapImage.imageFormat, _cloudMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D);
 
 	VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &_cloudMapImage.imageView));
 
@@ -2926,7 +2927,7 @@ void VulkanEngine::initClouds()
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		_cloudMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		_cloudMapDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 	{
 		//	writing to descriptor set
@@ -2995,7 +2996,7 @@ void VulkanEngine::initClouds()
 			vkutil::transitionImage(cmd, _cloudMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipeline);
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
-			vkCmdDispatch(cmd, std::ceil(HEIGHT_MAP_SIZE / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 16.0f), std::ceil(CLOUD_MAP_SIZE / 16.0f));
+			vkCmdDispatch(cmd, std::ceil(CLOUD_MAP_SIZE / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 1.0f), std::ceil(CLOUD_MAP_SIZE / 16.0f));
 		}
 	);
 

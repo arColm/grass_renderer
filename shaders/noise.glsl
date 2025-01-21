@@ -217,3 +217,40 @@ float cnoise(vec3 P){
   float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
   return 2.2 * n_xyz;
 }
+vec3 voronoiNoiseRandomVector(vec3 uv, float offset)
+{
+    mat3 m = mat3(
+        15.27, 47.63, 21.94,
+        99.41, 89.98, 53.12,
+        67.31, 37.24, 76.45); 
+    
+    uv = fract(sin(uv*m)*46839.32);
+
+    return vec3(
+        sin(uv.y + offset) * 0.5 + 0.5,
+        cos(uv.x + offset) * 0.5 + 0.5,
+        cos(sin(uv.z + offset)) * 0.5 + 0.5
+    );
+}
+
+float voronoiNoise(vec3 p, float cellDensity, float angleOffset)
+{
+    vec3 g = floor(p * cellDensity);
+    vec3 f = fract(p * cellDensity);
+    float minDistanceToCell = 100;
+
+    for(int x=-1;x<=1;x++)
+    {
+        for(int y=-1;y<=1;y++)
+        {
+            for(int z=-1;z<=1;z++)
+            {
+                vec3 cell = vec3(x,y,z);
+                vec3 cellOffset = voronoiNoiseRandomVector(cell+g,angleOffset);
+                float d = distance(cell + cellOffset,f);
+                minDistanceToCell = min(minDistanceToCell,d);
+            }
+        }
+    }
+    return minDistanceToCell;
+}
