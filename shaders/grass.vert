@@ -45,7 +45,6 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	a.y = 0;
 	b.y =0 ;
 	float c = dot(a,b);
-	//float s = length(cross(a,b));
 	float s =  (a.z * b.x - a.x * b.z);
 	matrix[0] = vec3(c,0,-s);
 	matrix[1] = vec3(0,1,0);
@@ -53,15 +52,11 @@ mat3 getGrassRotationMatrix(vec3 a,vec3 b) {
 	return matrix;
 }
 
-//float getWindStrength(uint vertexIndex) {
-//	return clamp(0.1 * (vertexIndex*vertexIndex/9),0,1);
-//}
 float getWindStrength(float height) {
 	return clamp(height*height,0,2);
 }
 
 vec3 getWindDirection(vec3 grassBladePosition) {
-	//return imageLoad(WindMap,imageSize(WindMap)/2+ivec2(grassBladePosition.x,grassBladePosition.z)).xyz;
     vec3 i = floor(grassBladePosition);
     vec3 f = fract(grassBladePosition);
 	ivec2 mapCenter = imageSize(WindMap)/2;
@@ -75,7 +70,6 @@ vec3 getWindDirection(vec3 grassBladePosition) {
 
     // Cubic Hermine Curve.  Same as SmoothStep()
     vec3 u = f*f*(3.0-2.0*f);
-    //vec3 u = mix(vec3(0.),vec3(1.),f);
 
     // Mix 4 coorners percentages
     return mix(a, b, u.x) +
@@ -86,12 +80,10 @@ vec3 getWindDirection(vec3 grassBladePosition) {
 mat3 getGrassRotationMatrix(vec3 vNormal,vec3 playerPosition, vec3 grassPosition) {
 	vec3 a = vNormal;
 	vec3 b = normalize((playerPosition + 10*(random(grassPosition.xz)-0.5))-grassPosition);
-	//vec3 b = vec3(sin(10*(random(grassPosition.xz)-0.5)),0,cos(10*(random(grassPosition.xz)-0.5)));
 	mat3 matrix;
 	a.y = 0;
 	b.y =0 ;
 	float c = dot(a,b);
-	//float s = length(cross(a,b));
 	float s =  (a.z * b.x - a.x * b.z);
 	matrix[0] = vec3(c,0,-s);
 	matrix[1] = vec3(0,1,0);
@@ -104,7 +96,6 @@ void main() {
 	vec3 windDirection = getWindDirection(grassBladePosition);
 
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
-	//v.position += windDirection * getWindStrength(gl_VertexIndex);
 
 	mat3 rotationTowardsPlayer = getGrassRotationMatrix(v.normal,PushConstants.playerPosition.xyz,grassData.positions[gl_InstanceIndex].xyz);
 	vec3 relativePosition = rotationTowardsPlayer * v.position;
@@ -113,23 +104,16 @@ void main() {
 	vec3 windOffset = (windDirection * getWindStrength(v.position.y));
 	windOffset.y += -length(windOffset)*0.5;
 	position+= windOffset;
-	//position = PushConstants.playerPosition.xyz+vec3(1,0,1) + v.position;
 
 	gl_Position = sceneData.viewProj * PushConstants.render_matrix * vec4(position,1.0);
-	//gl_Position = sceneData.viewProj * position;
 
-	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
 	outNormal = normalize((PushConstants.render_matrix * -vec4(
 		sceneData.sunlightDirection.x-(v.position.x+windOffset.x*3),
 		0.3*abs(random(grassBladePosition.xz)),
 		sceneData.sunlightDirection.z-(v.position.x+windOffset.z*3),
 		0)).xyz);
-	//outNormal = normalize(rotationTowardsPlayer*normalize(v.normal + vec3(random(grassBladePosition.xz))));
 
-	//outColor = v.color.xyz;// * materialData.colorFactors.xyz;
 	outColor = mix(v.color.xyz*0.8,v.color.xyz*1.2,(clamp(rnoise(position.xz*0.02),0,1)));
-	//outColor = abs(outNormal);
-	//outColor = windDirection;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
 

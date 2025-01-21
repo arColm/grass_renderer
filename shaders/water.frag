@@ -81,9 +81,8 @@ void main() {
 	//outFragColor = vec4(color,1.0f);
 	//outFragColor = vec4(light,1.0f);
 
-	//outNormal = vec4(inNormal,1);
-	outNormal = vec4(0,1,0,1);
+	outNormal = vec4(inNormal,1);
+	//outNormal = vec4(0,1,0,1);
 	outPosition = sceneData.view * vec4(inPos,1);
-	//outPosition = vec4((sceneData.view * vec4(inPos,1)).xyz,linearDepth(gl_FragCoord.z));
 	outSpecularMap = vec4(1);
 }

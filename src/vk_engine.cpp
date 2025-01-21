@@ -450,7 +450,8 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 void VulkanEngine::drawShadowMap(VkCommandBuffer cmd)
 {
-	for (int i = 0; i < CSM_COUNT; i++)
+	//for (int i = 0; i < CSM_COUNT; i++)
+	for (int i = CSM_COUNT-1; i >=0; i--)
 	{
 		//IDK if theres a better way to do this (there probably is) but for now
 		// everything is just copypasted from drawGeometry
@@ -1953,6 +1954,8 @@ void VulkanEngine::initGrass()
 
 		glm::vec4 bottomColor{ 0.14f,0.32f,0.08f,1.0f };
 		glm::vec4 topColor{ 0.38f,0.56f,0.25f,1.0f };
+		//glm::vec4 bottomColor{ 0.71f,0.475f,0.71f,1.0f };
+		//glm::vec4 topColor{ 0.91f,0.745f,0.91f,1.0f };
 		glm::vec3 normal(0, 0, -1);
 		float grassWidth = 0.03f;
 

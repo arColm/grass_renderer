@@ -70,7 +70,7 @@ void main() {
 	//gl_Position = sceneData.viewProj * position;
 
 	//outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outNormal = normalize((PushConstants.render_matrix * vec4(wave.y,1-2*wave.y,-wave.y, 1.f)).xyz);
+	outNormal = normalize((PushConstants.render_matrix * vec4(0.15*wave.y,1-wave.y,0.15*-wave.y, 1.f)).xyz);
 	outColor = v.color;// * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;

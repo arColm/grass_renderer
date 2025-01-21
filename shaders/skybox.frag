@@ -99,6 +99,7 @@ void main() {
 	vec3 normalizedSunPos = normalize(-sceneData.sunlightDirection.xyz);
 
 	vec3 topColorDay = vec3(0.694, 0.922, 0.914);
+	//vec3 topColorDay = vec3(0.46, 0.76, 0.80);
 	vec3 bottomColorDay = vec3(1);
 	//vec3 topColorNight = vec3( 0.1, 0.2, 0.4 );
 	//vec3 bottomColorNight = vec3( 0.01, 0.02, 0.05 );
@@ -110,6 +111,7 @@ void main() {
 
 	//vec3 sunColor = vec3(0.961, 0.8, 0.635);
 	vec3 sunColor = mix(vec3(1, 0.592, 0),vec3(0.961, 0.8, 0.635),pow(abs(normalizedSunPos.y),2)+0.3);
+	//vec3 sunColor = mix(vec3(0, 0.859, 1),vec3(0.792, 0.945, 0.969),pow(abs(normalizedSunPos.y),2)+0.3);
 
 	vec3 normalizedPos = normalize(inPosition);
 	float normalizedHeight = (normalizedPos.y+1)*0.5;
