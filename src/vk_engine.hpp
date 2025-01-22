@@ -242,6 +242,8 @@ public:
 	AllocatedImage _cloudMapImage;
 	VkDescriptorSet _cloudMapDescriptorSet;
 	VkDescriptorSetLayout _cloudMapDescriptorLayout;
+	VkDescriptorSet _cloudMapSamplerDescriptorSet;
+	VkDescriptorSetLayout _cloudMapSamplerDescriptorLayout;
 	VkPipelineLayout _cloudMapComputePipelineLayout;
 	VkPipeline _cloudMapComputePipeline;
 	std::shared_ptr<MeshAsset> _cloudMesh;

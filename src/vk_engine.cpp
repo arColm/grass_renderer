@@ -365,7 +365,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	UI_triangleCount += _skyboxMesh->surfaces[0].count / 3 * 1;
 	//draw clouds
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapDescriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapSamplerDescriptorSet, 0, nullptr);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
 	//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
@@ -3111,6 +3111,20 @@ void VulkanEngine::initClouds()
 		}
 	);
 
+	// DESCRIPTORS
+	//	descriptor layout
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		_cloudMapSamplerDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
+	{
+		//	writing to descriptor set
+		_cloudMapSamplerDescriptorSet = _globalDescriptorAllocator.allocate(_device, _cloudMapSamplerDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _cloudMapImage.imageView, _defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_device, _cloudMapSamplerDescriptorSet);
+	}
 
 	VkShaderModule fragShader;
 	if (!vkutil::loadShaderModule("./shaders/cloud.frag.spv", _device, &fragShader))
@@ -3140,7 +3154,7 @@ void VulkanEngine::initClouds()
 	//sets
 	VkDescriptorSetLayout layouts[] = {
 		_sceneDataDescriptorLayout,
-		_cloudMapDescriptorLayout
+		_cloudMapSamplerDescriptorLayout
 	};
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.

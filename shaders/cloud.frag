@@ -6,7 +6,8 @@
 #include "0_scene_data.glsl"
 #include "noise.glsl"
 
-layout(rgba16f, set = 1, binding = 0) readonly uniform image3D cloudMap;
+//layout(rgba16f, set = 1, binding = 0) readonly uniform image3D cloudMap;
+layout(set = 1, binding = 0) uniform sampler3D cloudMap;
 
 float PI = 3.1415926;
 
@@ -38,8 +39,17 @@ const vec3 BOX_BOUNDS_MAX = vec3(1200,80.9,1200);
 
 float sampleDensity(vec3 pos)
 {
-    const vec3 size = imageSize(cloudMap);
-    return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
+    //const vec3 size = imageSize(cloudMap);
+    //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
+
+    const ivec3 size = textureSize(cloudMap, 0);
+    vec3 uv = vec3(
+        (pos.x-BOX_BOUNDS_MIN.x) / (BOX_BOUNDS_MAX.x-BOX_BOUNDS_MIN.x),
+        (pos.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
+        (pos.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
+    );
+    uv = fract(uv);
+    return texture(cloudMap,uv).r;
 }
 
 float getCloudDensity(vec3 raySrc, vec3 rayHit, int resolution)
@@ -53,17 +63,19 @@ float getCloudDensity(vec3 raySrc, vec3 rayHit, int resolution)
 
     float distanceTravelled = 0;
     float stepSize = dstInsideBox / resolution;
+    float distanceLimit = min(distance(rayHit,raySrc),dstInsideBox);
 
-    if(dstToBox==0) return 0;
+    //if(dstToBox==0) return 0;
 
-    for(int i = 0; i<resolution;i++)
+    //for(int i = 0; i<resolution;i++)
+    while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        density += sampleDensity(pos)/resolution;
+        density += sampleDensity(pos +100*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
         distanceTravelled += stepSize;
     }
 
-
+    density = exp(-density);
 
     return density;
 }
@@ -89,7 +101,7 @@ float fbmClouds()
 // using a similar concept of 4 layers of noise and adding to obtain opacity
 void main() {
     
-    float cloud = getCloudDensity(inPlayerPos,inPosition,10);
+    float cloud = getCloudDensity(inPlayerPos,inPosition,50);
 
 	outFragColor = vec4(1,1,1,cloud);
     outNormal = vec4(0,-1,0,1);

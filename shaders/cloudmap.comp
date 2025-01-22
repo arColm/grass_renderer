@@ -16,8 +16,12 @@ void main() {
 	
 	if(texelCoord.x < size.x && texelCoord.y < size.y && texelCoord.z < size.z)
 	{
-		vec3 p = vec3(texelCoord)/size;
-		float n = voronoiNoise(p,16,0);
-		imageStore(data,texelCoord,vec4(n));
+		vec3 p = vec3(texelCoord);///size;
+		//float n = 1-voronoiNoise(p,0.01,0);
+		float n = 1-layeredVoronoiNoiseSmooth(p,0.01,0,0.4,2.0,3);
+		n = pow(n,5);
+		float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
+		heightMultiplier = clamp(heightMultiplier*1,0,1);
+		imageStore(data,texelCoord,vec4(n*heightMultiplier));
 	}
 }
