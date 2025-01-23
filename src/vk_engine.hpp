@@ -288,6 +288,8 @@ public:
 	//scene
 	void updateScene(float deltaTime);
 	void updateWindMap(VkCommandBuffer cmd);
+
+	void updateClouds(VkCommandBuffer cmd);
 private:
 
 	void initVulkan();

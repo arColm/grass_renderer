@@ -7,6 +7,15 @@ layout(rgba16f,set = 0, binding = 0) uniform image3D data;
 #include "noise.glsl"
 
 
+//push constants block
+layout( push_constant ) uniform constants
+{
+	//data1.x == time
+	vec4 data1;
+	vec4 data2;
+	vec4 data3;
+	vec4 data4;
+} PushConstants;
 
 
 void main() {
@@ -18,10 +27,10 @@ void main() {
 	{
 		vec3 p = vec3(texelCoord);///size;
 		//float n = 1-voronoiNoise(p,0.01,0);
-		float n = 1-layeredVoronoiNoiseSmooth(p,0.01,0,0.4,2.0,3);
-		n = pow(n,5);
-		float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
-		heightMultiplier = clamp(heightMultiplier*1,0,1);
-		imageStore(data,texelCoord,vec4(n*heightMultiplier));
+		float n = layeredVoronoiNoiseSmooth(p,0.01,PushConstants.data1.x,0.2,2.0,3);
+		n = pow(n,7);
+		//float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
+		//heightMultiplier = clamp(heightMultiplier*1,0,1);
+		imageStore(data,texelCoord,vec4(n));//*heightMultiplier));
 	}
 }

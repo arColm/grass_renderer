@@ -151,6 +151,7 @@ void VulkanEngine::draw()
 	vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	updateWindMap(cmd);
 	updateGrassData(cmd);
+	//updateClouds(cmd);
 
 	//calculate shadow map
 	vkutil::transitionImage(cmd, _shadowMapImageArray.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -889,6 +890,18 @@ void VulkanEngine::updateWindMap(VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil((float)(numCells) / 64.0),
 		1, 1);
 
+}
+
+void VulkanEngine::updateClouds(VkCommandBuffer cmd)
+{
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_time, 1, 1, 1);
+
+	vkutil::transitionImage(cmd, _cloudMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _cloudMapComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+	vkCmdDispatch(cmd, std::ceil(CLOUD_MAP_SIZE / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 1.0f), std::ceil(CLOUD_MAP_SIZE / 16.0f));
 }
 
 void VulkanEngine::initVulkan()
@@ -2950,18 +2963,18 @@ void VulkanEngine::initClouds()
 	}
 
 	//push constant range
-	//VkPushConstantRange computeBufferRange{};
-	//computeBufferRange.offset = 0;
-	//computeBufferRange.size = sizeof(ComputePushConstants);
-	//computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	VkPushConstantRange computeBufferRange{};
+	computeBufferRange.offset = 0;
+	computeBufferRange.size = sizeof(ComputePushConstants);
+	computeBufferRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
 	//sets
 
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo computePipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
-	//computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
-	//computePipelineLayoutInfo.pushConstantRangeCount = 1;
+	computePipelineLayoutInfo.pPushConstantRanges = &computeBufferRange;
+	computePipelineLayoutInfo.pushConstantRangeCount = 1;
 	computePipelineLayoutInfo.setLayoutCount = 1;
 	computePipelineLayoutInfo.pSetLayouts = &_cloudMapDescriptorLayout;
 
@@ -2993,10 +3006,7 @@ void VulkanEngine::initClouds()
 
 	immediateSubmit(
 		[&](VkCommandBuffer cmd) {
-			vkutil::transitionImage(cmd, _cloudMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipeline);
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
-			vkCmdDispatch(cmd, std::ceil(CLOUD_MAP_SIZE / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 1.0f), std::ceil(CLOUD_MAP_SIZE / 16.0f));
+			updateClouds(cmd);
 		}
 	);
 
