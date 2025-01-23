@@ -16,7 +16,7 @@ layout (location = 1) in vec3 inPlayerPos;
 
 #include "_fragOutput.glsl"
 
-const float LIGHT_ABSORPTION = 0.6;
+const float LIGHT_ABSORPTION = 0.5;
 const float DARKNESS_THRESHOLD = 0.0;
 
 //inspired from https://github.com/SebLague/Clouds
@@ -57,7 +57,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     uv = fract(uv);
     float density = texture(cloudMap,uv).r;
     
-    const float containerEdgeFadeDst = 50;
+    const float containerEdgeFadeDst = 100;
     float dstFromEdgeX = min(containerEdgeFadeDst, min(pos.x - BOX_BOUNDS_MIN.x, BOX_BOUNDS_MAX.x - pos.x));
     float dstFromEdgeZ = min(containerEdgeFadeDst, min(pos.z - BOX_BOUNDS_MIN.z, BOX_BOUNDS_MAX.z - pos.z));
     float edgeWeight = min(dstFromEdgeZ,dstFromEdgeX)/containerEdgeFadeDst;

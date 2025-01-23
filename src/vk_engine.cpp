@@ -2905,7 +2905,7 @@ void VulkanEngine::initClouds()
 	};
 
 	//hardcoding draw format to 32 bit float
-	_cloudMapImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_cloudMapImage.imageFormat = VK_FORMAT_R16_SFLOAT;
 	_cloudMapImage.imageExtent = imageExtent;
 
 	VkImageUsageFlags imageUsageFlags{};

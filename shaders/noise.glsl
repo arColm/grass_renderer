@@ -233,7 +233,7 @@ vec3 voronoiNoiseRandomVector(vec3 uv, float offset)
     );
 }
 
-float voronoiNoise(vec3 p, float cellDensity, float angleOffset)
+float voronoiNoise(vec3 p, float cellDensity, float angleOffset,vec3 wavelength)
 {
     vec3 g = floor(p * cellDensity);
     vec3 f = fract(p * cellDensity);
@@ -245,9 +245,14 @@ float voronoiNoise(vec3 p, float cellDensity, float angleOffset)
         {
             for(int z=-1;z<=1;z++)
             {
-                vec3 cell = vec3(x,y,z);
-                vec3 cellOffset = voronoiNoiseRandomVector(cell+g,angleOffset);
-                vec3 r = cell +cellOffset - f;
+                vec3 offset = vec3(x,y,z);
+                vec3 targetCell = offset+g;
+                //targetCell -= floor(targetCell/wavelength)*wavelength;
+                //targetCell = fract(targetCell/wavelength) * wavelength;
+                targetCell = mod(targetCell,wavelength);
+                targetCell += step(targetCell, vec3(0.0)) * wavelength;
+                vec3 cellOffset = voronoiNoiseRandomVector(targetCell,angleOffset);
+                vec3 r = offset +cellOffset - f;
                 //float d = distance(cell + cellOffset,f);
                 float d = dot(r,r);
                 minDistanceToCell = min(minDistanceToCell,d);
@@ -257,7 +262,7 @@ float voronoiNoise(vec3 p, float cellDensity, float angleOffset)
     return sqrt(minDistanceToCell);
 }
 
-float layeredVoronoiNoise(vec3 p, float cellDensity, float angleOffset, float persistence,float lacunarity, int octaves)
+float layeredVoronoiNoise(vec3 p, float cellDensity, float angleOffset, float persistence,float lacunarity, int octaves,vec3 wavelength)
 {
     const mat3 m = mat3(
         15.27, 47.63, 21.94,
@@ -270,7 +275,7 @@ float layeredVoronoiNoise(vec3 p, float cellDensity, float angleOffset, float pe
 
     for(int i=0;i<octaves;i++) {
         maxAmplitude += amplitude;
-        n+= voronoiNoise(p,cellDensity*frequency,angleOffset) * amplitude;
+        n+= voronoiNoise(p,cellDensity*frequency,angleOffset, wavelength) * amplitude;
         //p = m*p;
         //amplitude *= 0.3;
         amplitude *= persistence;
@@ -281,8 +286,9 @@ float layeredVoronoiNoise(vec3 p, float cellDensity, float angleOffset, float pe
 
 
 //adapted from https://iquilezles.org/articles/smoothvoronoi/
-float voronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset)
+float voronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset, vec3 wavelength)
 {
+    p+=wavelength;
     vec3 g = floor(p * cellDensity);
     vec3 f = fract(p * cellDensity);
     float res = 0.0;
@@ -293,9 +299,13 @@ float voronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset)
         {
             for(int z=-1;z<=1;z++)
             {
-                vec3 cell = vec3(x,y,z);
-                vec3 cellOffset = voronoiNoiseRandomVector(cell+g,angleOffset);
-                vec3 r = cell +cellOffset - f;
+                vec3 offset = vec3(x,y,z);
+                vec3 targetCell = offset+g;
+                targetCell = mod(targetCell,wavelength);
+                targetCell += step(targetCell, vec3(0.0)) * wavelength;
+
+                vec3 cellOffset = voronoiNoiseRandomVector(targetCell,angleOffset);
+                vec3 r = offset +cellOffset - f;
                 //float d = distance(cell + cellOffset,f);
                 float d = length(r);
                 res += exp2( -32.0 * d);
@@ -306,7 +316,7 @@ float voronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset)
 }
 
 
-float layeredVoronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset, float persistence,float lacunarity, int octaves)
+float layeredVoronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset, float persistence,float lacunarity, int octaves, vec3 wavelength)
 {
     const mat3 m = mat3(
         15.27, 47.63, 21.94,
@@ -319,7 +329,7 @@ float layeredVoronoiNoiseSmooth(vec3 p, float cellDensity, float angleOffset, fl
 
     for(int i=0;i<octaves;i++) {
         maxAmplitude += amplitude;
-        n+= voronoiNoiseSmooth(p,cellDensity*frequency,angleOffset) * amplitude;
+        n+= voronoiNoiseSmooth(p,cellDensity*frequency,angleOffset,wavelength*frequency) * amplitude;
         //p = m*p;
         //amplitude *= 0.3;
         amplitude *= persistence;

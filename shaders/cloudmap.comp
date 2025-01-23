@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 1, local_size_z = 16) in;
 
-layout(rgba16f,set = 0, binding = 0) uniform image3D data;
+layout(r16f,set = 0, binding = 0) uniform image3D data;
 
 #include "noise.glsl"
 
@@ -27,8 +27,9 @@ void main() {
 	{
 		vec3 p = vec3(texelCoord);///size;
 		//float n = 1-voronoiNoise(p,0.01,0);
-		float n = layeredVoronoiNoiseSmooth(p,0.01,PushConstants.data1.x,0.2,2.0,3);
-		n = pow(n,7);
+		float n = layeredVoronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,0.4,2.0,1,vec3(16,2,16));
+		//float n = voronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,vec3(16,2,16));
+		n = pow(n,3);
 		//float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
 		//heightMultiplier = clamp(heightMultiplier*1,0,1);
 		imageStore(data,texelCoord,vec4(n));//*heightMultiplier));
