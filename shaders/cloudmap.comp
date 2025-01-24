@@ -5,6 +5,7 @@ layout (local_size_x = 16, local_size_y = 1, local_size_z = 16) in;
 layout(rgba16f,set = 0, binding = 0) uniform image3D baseNoise;
 layout(rgba16f,set = 0, binding = 1) uniform image3D detailNoise;
 layout(rgba16f,set = 0, binding = 2) uniform image2D fluidNoise;
+layout(rgba16f,set = 0, binding = 3) uniform image2D weatherMap;
 
 #include "noise.glsl"
 
@@ -54,8 +55,8 @@ void main() {
 		imageStore(detailNoise,texelCoord,n);
 	}
 
-	ivec2 fluidSize = imageSize(fluidNoise);
-	if(texelCoord.x < fluidSize.x && texelCoord.z < fluidSize.y)
+	ivec2 size2d = imageSize(fluidNoise);
+	if(texelCoord.x < size2d.x && texelCoord.z < size2d.y)
 	{
 		const float freq = 128.;
 		ivec2 p = ivec2(texelCoord.xz);///size;
@@ -73,5 +74,20 @@ void main() {
 		n.b = curl.z;
 		n.a = 1;
 		imageStore(fluidNoise,p,n);
+	}
+	size2d = imageSize(weatherMap);
+	if(texelCoord.x < size2d.x && texelCoord.z < size2d.y)
+	{
+		const float freq = 256.;
+		ivec2 p = ivec2(texelCoord.xz);///size;
+		
+		float fbmN = mix(1.,fbm3D(vec3(p/freq,0),7,4,1.0,2.0,exp2(-.85)),.5);
+		fbmN = max(0,fbmN * 2. - 1.);
+		vec4 n;
+		n.r = fbmN;
+		n.g = 1;
+		n.b = 1;
+		n.a = 1;
+		imageStore(weatherMap,p,n);
 	}
 }

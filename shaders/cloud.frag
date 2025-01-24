@@ -10,6 +10,7 @@
 layout(set = 1, binding = 0) uniform sampler3D baseNoise;
 layout(set = 1, binding = 1) uniform sampler3D detailNoise;
 layout(set = 1, binding = 2) uniform sampler2D fluidNoise;
+layout(set = 1, binding = 3) uniform sampler2D weatherMap;
 
 float PI = 3.1415926;
 
@@ -18,8 +19,8 @@ layout (location = 1) in vec3 inPlayerPos;
 
 #include "_fragOutput.glsl"
 
-const float LIGHT_ABSORPTION = 0.5;
-const float DARKNESS_THRESHOLD = 0.0;
+const float LIGHT_ABSORPTION = 0.3; //less = darker - consider using this in weather map in 1 channel
+const float DARKNESS_THRESHOLD = 0.1;
 
 //inspired from https://github.com/SebLague/Clouds
 vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir)
@@ -42,9 +43,16 @@ vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir
 const vec3 BOX_BOUNDS_MIN = vec3(-1200,50.9,-1200);
 const vec3 BOX_BOUNDS_MAX = vec3(1200,80.9,1200);
 
+// Fractional value for sample position in the cloud layer.
+float GetHeightFractionForPoint(vec3 pos, vec2 cloudMinMax)
+{
+    float heightFraction = (pos.y - cloudMinMax.x) / (cloudMinMax.y - cloudMinMax.x);
+    return clamp(heightFraction,0,1);
+}
 
 float sampleDensity(vec3 pos,vec3 offset)
 {
+    const float FREQUENCY = 8.0;
     //const vec3 size = imageSize(cloudMap);
     //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
 
@@ -54,73 +62,45 @@ float sampleDensity(vec3 pos,vec3 offset)
         (pos.y+offset.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
         (pos.z+offset.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
     );
+    vec4 weather = texture(weatherMap,fract(uv.xz),0);
+    uv *= vec3(FREQUENCY,1,FREQUENCY);
     uv = fract(uv);
-    float density = texture(baseNoise,uv).r;
-    
-    const float containerEdgeFadeDst = 100;
-    float dstFromEdgeX = min(containerEdgeFadeDst, min(pos.x - BOX_BOUNDS_MIN.x, BOX_BOUNDS_MAX.x - pos.x));
-    float dstFromEdgeZ = min(containerEdgeFadeDst, min(pos.z - BOX_BOUNDS_MIN.z, BOX_BOUNDS_MAX.z - pos.z));
-    float edgeWeight = min(dstFromEdgeZ,dstFromEdgeX)/containerEdgeFadeDst;
-    float gMin = .2;
-    float gMax = .7;
-    float heightPercent = (pos.y - BOX_BOUNDS_MIN.y) / size.y;
-    float heightGradient = clamp(remap(heightPercent, 0.0, gMin, 0, 1),0,1) * clamp(remap(heightPercent, 1, gMax, 0, 1),0,1);
-    heightGradient *= edgeWeight;
 
+    vec4 lowFrequencyNoises = texture(baseNoise,uv,0);
+    float lowFrequencyFbm = (lowFrequencyNoises.g * 0.625) + (lowFrequencyNoises.b * 0.25) + (lowFrequencyNoises.a * 0.125);
+    float baseCloud = remap(lowFrequencyNoises.r,-(1.0-lowFrequencyFbm),1.0, 0.0, 1.0);
+    float heightGradient = GetHeightFractionForPoint(pos,vec2(0.2,0.7));
 
-    return density * heightGradient;
+    baseCloud *= heightGradient;
+
+    //coverage
+    float coverage = weather.r;
+    float baseCloudWithCoverage = remap(baseCloud,coverage,1.0,0.0,1.0);
+    baseCloudWithCoverage *= coverage;
+
+    return baseCloudWithCoverage;
 }
 
 float getLightStrength(vec3 raySrc, int resolution)
 {
     vec3 dirToLight = -sceneData.sunlightDirection.xyz;
-    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,dirToLight).y;
+    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,1.0/dirToLight).y;
 
     float stepSize = dstInsideBox / resolution;
     float density = 0;
 
+    vec3 pos = raySrc;
+
     for(int i=0;i<resolution;i++)
     {
-        vec3 pos = raySrc +dirToLight * i * stepSize;
-        density += max(0,sampleDensity(pos,vec3(0)) * stepSize);
+        pos += dirToLight * stepSize;
+        density += max(0,sampleDensity(pos,vec3(0))*stepSize);
     }
 
     float transmittance = exp(-density * LIGHT_ABSORPTION);
     return DARKNESS_THRESHOLD + transmittance * (1-DARKNESS_THRESHOLD);
 
     
-}
-
-float getCloudDensity(vec3 raySrc, vec3 rayHit, int resolution)
-{
-    float density = 0;
-    vec3 rayDir = normalize(rayHit-raySrc);
-
-    vec2 boxIntersectInfo = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,rayDir);
-    float dstToBox = boxIntersectInfo.x;
-    float dstInsideBox = boxIntersectInfo.y;
-
-    float distanceTravelled = 0;
-    float stepSize = dstInsideBox / resolution;
-    float distanceLimit = min(distance(rayHit,raySrc),dstInsideBox);
-
-    //if(dstToBox==0) return 0;
-
-    //for(int i = 0; i<resolution;i++)
-    float transmittance = 1;
-    float light = 0;
-    while(distanceTravelled < distanceLimit)
-    {
-        vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,100*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
-
-        distanceTravelled += stepSize;
-    }
-
-    density = exp(-density);
-
-
-    return density;
 }
 
 vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
@@ -144,20 +124,21 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,100*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
+        float nextDensity = sampleDensity(pos,1*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
 
         if(nextDensity>0)
         {
             float lightTransmittance = getLightStrength(pos,10);
-            light += nextDensity * stepSize * transmittance * lightTransmittance * 1.0;
+            light += nextDensity * transmittance * lightTransmittance *20/resolution;
             transmittance *= exp(-nextDensity * stepSize * LIGHT_ABSORPTION);
         }
         if(transmittance < 0.01) break;
 
         distanceTravelled += stepSize;
     }
-
-
+    light = clamp(light,0,1);
+    transmittance = 1-clamp(transmittance,0,1);
+    //light = 1;
     vec4 color = vec4(0,0,0,1.0) * transmittance + (vec4(sceneData.sunlightColor.xyz,0) * light);
 
     return color;

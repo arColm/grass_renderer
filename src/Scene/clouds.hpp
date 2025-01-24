@@ -21,6 +21,8 @@ private:
 	AllocatedImage _baseNoiseImage;
 	AllocatedImage _detailNoiseImage;
 	AllocatedImage _fluidNoiseImage;
+	AllocatedImage _weatherImage;
+
 	VkDescriptorSet _cloudMapDescriptorSet;
 	VkDescriptorSetLayout _cloudMapDescriptorLayout;
 	VkDescriptorSet _cloudMapSamplerDescriptorSet;
