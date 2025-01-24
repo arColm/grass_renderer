@@ -6,6 +6,8 @@
 #include "player.hpp"
 #include "vk_engine_settings.hpp"
 
+#include "./Scene/clouds.hpp"
+
 
 class VulkanEngine
 {
@@ -231,18 +233,7 @@ public:
 	VkPipeline _skyboxPipeline; 
 
 	//clouds
-	static const int CLOUD_MAP_SIZE = 1024;
-	static const int CLOUD_MAP_HEIGHT = 128;
-	AllocatedImage _cloudMapImage;
-	VkDescriptorSet _cloudMapDescriptorSet;
-	VkDescriptorSetLayout _cloudMapDescriptorLayout;
-	VkDescriptorSet _cloudMapSamplerDescriptorSet;
-	VkDescriptorSetLayout _cloudMapSamplerDescriptorLayout;
-	VkPipelineLayout _cloudMapComputePipelineLayout;
-	VkPipeline _cloudMapComputePipeline;
-	std::shared_ptr<MeshAsset> _cloudMesh;
-	VkPipelineLayout _cloudPipelineLayout;
-	VkPipeline _cloudPipeline;
+	CloudMesh _clouds;
 
 	//water
 	std::shared_ptr<MeshAsset> _waterMesh;
@@ -283,7 +274,6 @@ public:
 	void updateScene(float deltaTime);
 	void updateWindMap(VkCommandBuffer cmd);
 
-	void updateClouds(VkCommandBuffer cmd);
 private:
 
 	void initVulkan();
@@ -312,13 +302,15 @@ private:
 	void initSceneData();
 
 	//scene
+	void initScene();
+	void cleanupScene(); //todo : if this gets too big, consider refactoring
+
 	void initGround();
 	void initGrass();
 	void initHeightMap();
 	void initShadowMapResources();
 	void initWindMap();
 	void initSkybox();
-	void initClouds();
 	void initWater();
 
 };

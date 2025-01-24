@@ -27,7 +27,7 @@ void main() {
 	{
 		vec3 p = vec3(texelCoord);///size;
 		//float n = 1-voronoiNoise(p,0.01,0);
-		float n = layeredVoronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,0.4,2.0,1,vec3(16,2,16));
+		float n = 1-layeredVoronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,0.5,1.0,5,vec3(16,2,16));
 		//float n = voronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,vec3(16,2,16));
 		n = pow(n,3);
 		//float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
