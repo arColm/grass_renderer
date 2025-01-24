@@ -12,7 +12,9 @@ void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(engine->_time, 1, 1, 1);
 
-	vkutil::transitionImage(cmd, _cloudMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _baseNoiseImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _detailNoiseImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _fluidNoiseImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _cloudMapComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
@@ -23,51 +25,117 @@ void CloudMesh::init(VulkanEngine* engine)
 {
 	_engine = engine;
 	/*
-	*  WORLEY NOISE
+	*  IMAGES
 	*/
+	{
+		VkExtent3D imageExtent = {
+			CLOUD_MAP_SIZE,
+			CLOUD_MAP_HEIGHT,
+			CLOUD_MAP_SIZE,
+		};
 
-	VkExtent3D imageExtent = {
-		CLOUD_MAP_SIZE,
-		CLOUD_MAP_HEIGHT,
-		CLOUD_MAP_SIZE,
-	};
+		//hardcoding draw format to 32 bit float
+		_baseNoiseImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		_baseNoiseImage.imageExtent = imageExtent;
 
-	//hardcoding draw format to 32 bit float
-	_cloudMapImage.imageFormat = VK_FORMAT_R16_SFLOAT;
-	_cloudMapImage.imageExtent = imageExtent;
+		VkImageUsageFlags imageUsageFlags{};
+		imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+		if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	VkImageUsageFlags imageUsageFlags{};
-	imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
-	if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_baseNoiseImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_3D);
 
-	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_cloudMapImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_3D);
+		//allocate draw image from gpu memory
+		VmaAllocationCreateInfo imgAllocInfo{};
+		imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+		imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
 
-	//allocate draw image from gpu memory
-	VmaAllocationCreateInfo imgAllocInfo{};
-	imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
-	imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+		//allocate and create image
+		vmaCreateImage(engine->_allocator, &imgInfo, &imgAllocInfo, &_baseNoiseImage.image, &_baseNoiseImage.allocation, nullptr);
 
-	//allocate and create image
-	vmaCreateImage(engine->_allocator, &imgInfo, &imgAllocInfo, &_cloudMapImage.image, &_cloudMapImage.allocation, nullptr);
+		//build image view for the draw image to use for rendering
+		VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_baseNoiseImage.imageFormat, _baseNoiseImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D);
 
-	//build image view for the draw image to use for rendering
-	VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_cloudMapImage.imageFormat, _cloudMapImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D);
+		VK_CHECK(vkCreateImageView(engine->_device, &viewInfo, nullptr, &_baseNoiseImage.imageView));
+	}
+	{
+		VkExtent3D imageExtent = {
+			CLOUD_MAP_SIZE/4,
+			CLOUD_MAP_HEIGHT/4,
+			CLOUD_MAP_SIZE/4,
+		};
 
-	VK_CHECK(vkCreateImageView(engine->_device, &viewInfo, nullptr, &_cloudMapImage.imageView));
+		//hardcoding draw format to 32 bit float
+		_detailNoiseImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		_detailNoiseImage.imageExtent = imageExtent;
 
+		VkImageUsageFlags imageUsageFlags{};
+		imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+		if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	// DESCRIPTORS
+		VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_detailNoiseImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_3D);
+
+		//allocate draw image from gpu memory
+		VmaAllocationCreateInfo imgAllocInfo{};
+		imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+		imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+		//allocate and create image
+		vmaCreateImage(engine->_allocator, &imgInfo, &imgAllocInfo, &_detailNoiseImage.image, &_detailNoiseImage.allocation, nullptr);
+
+		//build image view for the draw image to use for rendering
+		VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_detailNoiseImage.imageFormat, _detailNoiseImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D);
+
+		VK_CHECK(vkCreateImageView(engine->_device, &viewInfo, nullptr, &_detailNoiseImage.imageView));
+	}
+	{
+		VkExtent3D imageExtent = {
+			CLOUD_MAP_SIZE,
+			CLOUD_MAP_SIZE,
+			1
+		};
+
+		//hardcoding draw format to 32 bit float
+		_fluidNoiseImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		_fluidNoiseImage.imageExtent = imageExtent;
+
+		VkImageUsageFlags imageUsageFlags{};
+		imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+		if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+		VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_fluidNoiseImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_2D);
+
+		//allocate draw image from gpu memory
+		VmaAllocationCreateInfo imgAllocInfo{};
+		imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; //never accessed from cpu
+		imgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); //only gpu-side VRAM, fastest access
+
+		//allocate and create image
+		vmaCreateImage(engine->_allocator, &imgInfo, &imgAllocInfo, &_fluidNoiseImage.image, &_fluidNoiseImage.allocation, nullptr);
+
+		//build image view for the draw image to use for rendering
+		VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(_fluidNoiseImage.imageFormat, _fluidNoiseImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_2D);
+
+		VK_CHECK(vkCreateImageView(engine->_device, &viewInfo, nullptr, &_fluidNoiseImage.imageView));
+	}
+
+	/*
+	*  DESCRIPTORS
+	*/
 	//	descriptor layout
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		_cloudMapDescriptorLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 	{
 		//	writing to descriptor set
 		_cloudMapDescriptorSet = engine->_globalDescriptorAllocator.allocate(engine->_device, _cloudMapDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _cloudMapImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.writeImage(0, _baseNoiseImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.writeImage(1, _detailNoiseImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.writeImage(2, _fluidNoiseImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.updateSet(engine->_device, _cloudMapDescriptorSet);
 	}
 
@@ -235,13 +303,17 @@ void CloudMesh::init(VulkanEngine* engine)
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		_cloudMapSamplerDescriptorLayout = builder.build(engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 	{
 		//	writing to descriptor set
 		_cloudMapSamplerDescriptorSet = engine->_globalDescriptorAllocator.allocate(engine->_device, _cloudMapSamplerDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _cloudMapImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(0, _baseNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(1, _detailNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(2, _fluidNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.updateSet(engine->_device, _cloudMapSamplerDescriptorSet);
 	}
 
@@ -347,8 +419,12 @@ int CloudMesh::draw(GPUDrawPushConstants pushConstants, VkCommandBuffer cmd)
 
 void CloudMesh::cleanup()
 {
-	vkDestroyImageView(_engine->_device, _cloudMapImage.imageView, nullptr);
-	vmaDestroyImage(_engine->_allocator, _cloudMapImage.image, _cloudMapImage.allocation); //note that VMA allocated objects are deleted with VMA
+	vkDestroyImageView(_engine->_device, _baseNoiseImage.imageView, nullptr);
+	vmaDestroyImage(_engine->_allocator, _baseNoiseImage.image, _baseNoiseImage.allocation);
+	vkDestroyImageView(_engine->_device, _detailNoiseImage.imageView, nullptr);
+	vmaDestroyImage(_engine->_allocator, _detailNoiseImage.image, _detailNoiseImage.allocation);
+	vkDestroyImageView(_engine->_device, _fluidNoiseImage.imageView, nullptr);
+	vmaDestroyImage(_engine->_allocator, _fluidNoiseImage.image, _fluidNoiseImage.allocation);
 
 	vkDestroyPipelineLayout(_engine->_device, _cloudMapComputePipelineLayout, nullptr);
 	vkDestroyPipeline(_engine->_device, _cloudMapComputePipeline, nullptr);

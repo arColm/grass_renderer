@@ -7,7 +7,9 @@
 #include "noise.glsl"
 
 //layout(rgba16f, set = 1, binding = 0) readonly uniform image3D cloudMap;
-layout(set = 1, binding = 0) uniform sampler3D cloudMap;
+layout(set = 1, binding = 0) uniform sampler3D baseNoise;
+layout(set = 1, binding = 1) uniform sampler3D detailNoise;
+layout(set = 1, binding = 2) uniform sampler2D fluidNoise;
 
 float PI = 3.1415926;
 
@@ -40,22 +42,20 @@ vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir
 const vec3 BOX_BOUNDS_MIN = vec3(-1200,50.9,-1200);
 const vec3 BOX_BOUNDS_MAX = vec3(1200,80.9,1200);
 
-float remap(float v, float minOld, float maxOld, float minNew, float maxNew) {
-    return minNew + (v-minOld) * (maxNew - minNew) / (maxOld-minOld);
-}
+
 float sampleDensity(vec3 pos,vec3 offset)
 {
     //const vec3 size = imageSize(cloudMap);
     //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
 
-    const ivec3 size = textureSize(cloudMap, 0);
+    const ivec3 size = textureSize(baseNoise, 0);
     vec3 uv = vec3(
         (pos.x+offset.x-BOX_BOUNDS_MIN.x) / (BOX_BOUNDS_MAX.x-BOX_BOUNDS_MIN.x),
         (pos.y+offset.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
         (pos.z+offset.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
     );
     uv = fract(uv);
-    float density = texture(cloudMap,uv).r;
+    float density = texture(baseNoise,uv).r;
     
     const float containerEdgeFadeDst = 100;
     float dstFromEdgeX = min(containerEdgeFadeDst, min(pos.x - BOX_BOUNDS_MIN.x, BOX_BOUNDS_MAX.x - pos.x));

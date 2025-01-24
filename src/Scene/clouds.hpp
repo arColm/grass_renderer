@@ -7,7 +7,7 @@
 
 class CloudMesh {
 public:
-	static const int CLOUD_MAP_SIZE = 1024;
+	static const int CLOUD_MAP_SIZE = 128;
 	static const int CLOUD_MAP_HEIGHT = 128;
 
 	void update(VulkanEngine* engine, VkCommandBuffer cmd);
@@ -18,7 +18,9 @@ public:
 private:
 	VulkanEngine* _engine;
 
-	AllocatedImage _cloudMapImage;
+	AllocatedImage _baseNoiseImage;
+	AllocatedImage _detailNoiseImage;
+	AllocatedImage _fluidNoiseImage;
 	VkDescriptorSet _cloudMapDescriptorSet;
 	VkDescriptorSetLayout _cloudMapDescriptorLayout;
 	VkDescriptorSet _cloudMapSamplerDescriptorSet;

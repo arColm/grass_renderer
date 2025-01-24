@@ -2,7 +2,9 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 1, local_size_z = 16) in;
 
-layout(r16f,set = 0, binding = 0) uniform image3D data;
+layout(rgba16f,set = 0, binding = 0) uniform image3D baseNoise;
+layout(rgba16f,set = 0, binding = 1) uniform image3D detailNoise;
+layout(rgba16f,set = 0, binding = 2) uniform image2D fluidNoise;
 
 #include "noise.glsl"
 
@@ -20,18 +22,56 @@ layout( push_constant ) uniform constants
 
 void main() {
 	ivec3 texelCoord = ivec3(gl_GlobalInvocationID.xyz);
-	ivec3 size = imageSize(data);
+	ivec3 size = imageSize(baseNoise);
 
 	
 	if(texelCoord.x < size.x && texelCoord.y < size.y && texelCoord.z < size.z)
 	{
+		const float freq = 128.;
 		vec3 p = vec3(texelCoord);///size;
-		//float n = 1-voronoiNoise(p,0.01,0);
-		float n = 1-layeredVoronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,0.5,1.0,5,vec3(16,2,16));
-		//float n = voronoiNoiseSmooth(p,1./64.,PushConstants.data1.x,vec3(16,2,16));
-		n = pow(n,3);
-		//float heightMultiplier = 1-abs(texelCoord.y - size.y*0.5)/(size.y*0.5);
-		//heightMultiplier = clamp(heightMultiplier*1,0,1);
-		imageStore(data,texelCoord,vec4(n));//*heightMultiplier));
+
+		float fbmN = mix(1.,fbm3D(p/freq,7,4,1.0,2.0,exp2(-.85)),.5);
+		fbmN = abs(fbmN * 2. - 1.);
+
+		vec4 n;
+		n.g = worleyFbm(p/freq,4.);
+		n.b = worleyFbm(p/freq,8.);
+		n.a = worleyFbm(p/freq,16.);
+		n.r = remap(fbmN, 0., 1., n.g, 1.); // perlin-worley
+		imageStore(baseNoise,texelCoord,n);
+	}
+
+	size = imageSize(detailNoise);
+	if(texelCoord.x < size.x && texelCoord.y < size.y && texelCoord.z < size.z)
+	{
+		const float freq = 64.;
+		vec3 p = vec3(texelCoord);///size;
+		vec4 n;
+		n.r = worleyFbm((p+3)/freq,4.);
+		n.g = worleyFbm((p+3)/freq,8.);
+		n.b = worleyFbm((p+3)/freq,16.);
+		n.a = 1;
+		imageStore(detailNoise,texelCoord,n);
+	}
+
+	ivec2 fluidSize = imageSize(fluidNoise);
+	if(texelCoord.x < fluidSize.x && texelCoord.z < fluidSize.y)
+	{
+		const float freq = 128.;
+		ivec2 p = ivec2(texelCoord.xz);///size;
+
+		vec3 pos = vec3(p, length(p)*.5)/freq;
+		
+		vec2 e = vec2(.01,0);
+		float x = (curlNoise(pos+e.yxy)-curlNoise(pos-e.yxy))/(2.*e.x);
+		float y = (curlNoise(pos+e.xyy)-curlNoise(pos-e.xyy))/(2.*e.x);
+		float z = (curlNoise(pos+e.yyx)-curlNoise(pos-e.yxx))/(2.*e.x);
+		vec3 curl = vec3(x,-y,z);
+		vec4 n;
+		n.r = curl.x;
+		n.g = curl.y;
+		n.b = curl.z;
+		n.a = 1;
+		imageStore(fluidNoise,p,n);
 	}
 }
