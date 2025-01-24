@@ -26,10 +26,6 @@
 #include "noise.hpp"
 #include "vk_buffers.hpp"
 
-const int VulkanEngine::HEIGHT_MAP_SIZE = 2048;
-const int VulkanEngine::SHADOWMAP_RESOLUTION = 2048;
-const int VulkanEngine::RENDER_DISTANCE = 600;
-const float VulkanEngine::CSM_SCALE = 3.5f;
 
 VulkanEngine* loadedEngine = nullptr;
 

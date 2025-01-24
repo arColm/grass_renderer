@@ -4,12 +4,12 @@
 #include "vk_loader.hpp"
 #include "vk_descriptors.hpp"
 #include "player.hpp"
+#include "vk_engine_settings.hpp"
 
 
 class VulkanEngine
 {
 public:
-	static const int CSM_COUNT = 3;
 
 	struct SceneData
 	{
@@ -97,8 +97,6 @@ public:
 	struct SDL_Window* _window{ nullptr };
 	bool _windowResized{ false };
 	static VulkanEngine& Get();
-	static constexpr unsigned int FRAME_OVERLAP = 2;
-	static constexpr bool bUseValidationLayers = true;
 
 
 	VkInstance _instance;
@@ -191,8 +189,6 @@ public:
 	std::shared_ptr<MeshAsset> _lowQualityGrassMesh;
 
 	//terrain
-	static const int RENDER_DISTANCE;
-	static const int HEIGHT_MAP_SIZE;
 	AllocatedImage _heightMapImage;
 	VkPipelineLayout _heightMapComputePipelineLayout;
 	VkPipeline _heightMapComputePipeline;
@@ -202,8 +198,6 @@ public:
 	VkDescriptorSet _heightMapSamplerDescriptorSet;
 
 	//shadowmap
-	static const int SHADOWMAP_RESOLUTION;
-	static const float CSM_SCALE;
 	struct ShadowMapData {
 		glm::mat4 viewProj[CSM_COUNT];
 	} _shadowMapData;

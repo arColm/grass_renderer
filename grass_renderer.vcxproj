@@ -136,6 +136,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="src\noise.cpp" />
     <ClCompile Include="src\player.cpp" />
+    <ClCompile Include="src\Scene\clouds.cpp" />
     <ClCompile Include="src\vk_buffers.cpp" />
     <ClCompile Include="src\vk_descriptors.cpp" />
     <ClCompile Include="src\vk_engine.cpp" />
@@ -165,9 +166,11 @@
     <ClInclude Include="Application.hpp" />
     <ClInclude Include="src\noise.hpp" />
     <ClInclude Include="src\player.hpp" />
+    <ClInclude Include="src\Scene\clouds.hpp" />
     <ClInclude Include="src\vk_buffers.hpp" />
     <ClInclude Include="src\vk_descriptors.hpp" />
     <ClInclude Include="src\vk_engine.hpp" />
+    <ClInclude Include="src\vk_engine_settings.hpp" />
     <ClInclude Include="src\vk_images.hpp" />
     <ClInclude Include="src\vk_initializers.hpp" />
     <ClInclude Include="src\vk_loader.hpp" />

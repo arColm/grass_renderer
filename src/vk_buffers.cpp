@@ -30,3 +30,27 @@ void vkutil::bufferBarrier(VkCommandBuffer cmd, VkBuffer buffer, VkDeviceSize si
 
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
+
+AllocatedBuffer vkutil::createBuffer(VmaAllocator allocator, size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+{
+	//allocate buffer
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.pNext = nullptr;
+
+	bufferInfo.size = allocSize;
+	bufferInfo.usage = usage;
+
+	VmaAllocationCreateInfo vmaAllocInfo{};
+	vmaAllocInfo.usage = memoryUsage;
+	vmaAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; //maps pointer so we can write to the memory
+
+	AllocatedBuffer newBuffer;
+	VK_CHECK(vmaCreateBuffer(allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.allocationInfo));
+	return newBuffer;
+}
+
+void vkutil::destroyBuffer(VmaAllocator allocator, const AllocatedBuffer& buffer)
+{
+	vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
+}
