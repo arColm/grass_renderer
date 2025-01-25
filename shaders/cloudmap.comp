@@ -82,7 +82,7 @@ void main() {
 		ivec2 p = ivec2(texelCoord.xz);///size;
 		
 		float fbmN = mix(1.,fbm3D(vec3(p/freq,0),7,4,1.0,2.0,exp2(-.85)),.5);
-		fbmN = max(0,fbmN * 2. - 1.);
+		fbmN = max(-1,fbmN * 2. - 1.);
 		vec4 n;
 		n.r = fbmN;
 		n.g = 1;

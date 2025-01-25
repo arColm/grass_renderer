@@ -5,17 +5,26 @@
 #include "../vk_descriptors.hpp"
 
 
-class CloudMesh {
+class CloudMesh 
+{
 public:
 	static const int CLOUD_MAP_SIZE = 128;
 	static const int CLOUD_MAP_HEIGHT = 128;
 
 	void update(VulkanEngine* engine, VkCommandBuffer cmd);
 	void init(VulkanEngine* engine);
-	int draw(GPUDrawPushConstants pushConstants, VkCommandBuffer cmd); //returns number of tris
+	int draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd); //returns number of tris
+
+	void drawGUI();
 
 	void cleanup();
 private:
+	struct CloudSettingsPushConstants
+	{
+		float coverage;
+	};
+	float _cloudCoverage = 0.5f;
+
 	VulkanEngine* _engine;
 
 	AllocatedImage _baseNoiseImage;
@@ -27,6 +36,8 @@ private:
 	VkDescriptorSetLayout _cloudMapDescriptorLayout;
 	VkDescriptorSet _cloudMapSamplerDescriptorSet;
 	VkDescriptorSetLayout _cloudMapSamplerDescriptorLayout;
+	VkDescriptorSet _cloudSettingsDescriptorSet;
+	VkDescriptorSetLayout _cloudSettingsDescriptorLayout;
 	VkPipelineLayout _cloudMapComputePipelineLayout;
 	VkPipeline _cloudMapComputePipeline;
 	std::shared_ptr<MeshAsset> _cloudMesh;

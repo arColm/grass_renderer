@@ -26,12 +26,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	Vertex vertices[];
 };
 
-layout( push_constant ) uniform constants
-{
-	mat4 render_matrix;
-	vec4 playerPosition;
-	VertexBuffer vertexBuffer;
-} PushConstants;
+#include "_pushConstantsDraw.glsl"
 
 vec3 getWindDirection(vec3 pos) {
 	//return imageLoad(WindMap,imageSize(WindMap)/2+ivec2(pos.x,pos.z)).xyz;

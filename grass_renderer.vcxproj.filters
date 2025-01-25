@@ -256,5 +256,8 @@
     <None Include="shaders\cloudmap.comp">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="shaders\_pushConstantsDraw.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

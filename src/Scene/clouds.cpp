@@ -6,6 +6,8 @@
 #include "../vk_pipelines.hpp"
 #include "../vk_buffers.hpp"
 #include "../vk_images.hpp"
+#include "../../thirdparty/imgui/imgui.h"
+#include <iostream>
 
 void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 {
@@ -372,10 +374,11 @@ void CloudMesh::init(VulkanEngine* engine)
 	}
 
 	//push constant range
-	VkPushConstantRange bufferRange{};
-	bufferRange.offset = 0;
-	bufferRange.size = sizeof(GPUDrawPushConstants);
-	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	VkPushConstantRange pushRange[1];
+	pushRange[0].offset = 0;
+	pushRange[0].size = sizeof(GPUDrawPushConstants);
+	pushRange[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
 
 	//sets
 	VkDescriptorSetLayout layouts[] = {
@@ -385,7 +388,7 @@ void CloudMesh::init(VulkanEngine* engine)
 	//build pipeline layout that controls the input/outputs of shader
 	//	note: no descriptor sets or other yet.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
-	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+	pipelineLayoutInfo.pPushConstantRanges = pushRange;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.setLayoutCount = 2;
 	pipelineLayoutInfo.pSetLayouts = layouts;
@@ -440,16 +443,30 @@ void CloudMesh::init(VulkanEngine* engine)
 
 }
 
-int CloudMesh::draw(GPUDrawPushConstants pushConstants, VkCommandBuffer cmd)
+int CloudMesh::draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd)
 {
+	CloudSettingsPushConstants settings;
+	settings.coverage = (-_cloudCoverage + 0.5f) * 2;
+
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapSamplerDescriptorSet, 0, nullptr);
+	pushConstants.data = glm::vec4(settings.coverage, settings.coverage, settings.coverage, settings.coverage);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
-	//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
-	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, sceneDataDescriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapSamplerDescriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, _cloudPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);	
 	vkCmdBindIndexBuffer(cmd, _cloudMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _cloudMesh->surfaces[0].count, 1, _cloudMesh->surfaces[0].startIndex, 0, 0);
 	return _cloudMesh->surfaces[0].count / 3 * 1;
+}
+
+void CloudMesh::drawGUI()
+{
+	if (ImGui::Begin("cloud settings"))
+	{
+		ImGui::SliderFloat("coverage", &_cloudCoverage, 0., 1.);
+		ImGui::End();
+	}
+
 }
 
 void CloudMesh::cleanup()

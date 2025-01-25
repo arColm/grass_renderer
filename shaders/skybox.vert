@@ -11,12 +11,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	vec3 vertices[];
 };
 
-layout( push_constant ) uniform constants
-{
-	mat4 render_matrix;
-	vec4 playerPosition;
-	VertexBuffer vertexBuffer;
-} PushConstants;
+#include "_pushConstantsDraw.glsl"
 
 
 void main() {

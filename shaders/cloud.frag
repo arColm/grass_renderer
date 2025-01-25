@@ -18,6 +18,15 @@ layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inPlayerPos;
 
 #include "_fragOutput.glsl"
+layout(buffer_reference, std430) readonly buffer VertexBuffer {
+	vec3 vertices[];
+};
+
+#include "_pushConstantsDraw.glsl"
+//layout( push_constant ) uniform constants
+//{
+//	float coverage;
+//} PushConstants;
 
 const float LIGHT_ABSORPTION = 0.3; //less = darker - consider using this in weather map in 1 channel
 const float DARKNESS_THRESHOLD = 0.1;
@@ -65,20 +74,36 @@ float sampleDensity(vec3 pos,vec3 offset)
     vec4 weather = texture(weatherMap,fract(uv.xz),0);
     uv *= vec3(FREQUENCY,1,FREQUENCY);
     uv = fract(uv);
+    vec4 detailNoise = texture(detailNoise,uv * 0.1,0);
+    vec4 fluidNoise = texture(fluidNoise,uv.xz,0);
 
     vec4 lowFrequencyNoises = texture(baseNoise,uv,0);
     float lowFrequencyFbm = (lowFrequencyNoises.g * 0.625) + (lowFrequencyNoises.b * 0.25) + (lowFrequencyNoises.a * 0.125);
     float baseCloud = remap(lowFrequencyNoises.r,-(1.0-lowFrequencyFbm),1.0, 0.0, 1.0);
-    float heightGradient = GetHeightFractionForPoint(pos,vec2(0.2,0.7));
+    
+    float heightFraction = GetHeightFractionForPoint(pos,vec2(BOX_BOUNDS_MIN.y,BOX_BOUNDS_MAX.y));
 
-    baseCloud *= heightGradient;
+
+    baseCloud *= heightFraction;
 
     //coverage
     float coverage = weather.r;
+    coverage = remap(coverage,PushConstants.data.x,1,0,1);
+    //coverage = clamp(coverage,0,1);
     float baseCloudWithCoverage = remap(baseCloud,coverage,1.0,0.0,1.0);
     baseCloudWithCoverage *= coverage;
+    
+    // adding noise
+    pos.xz += fluidNoise.xy * (1.0-heightFraction);
+    float highFrequencyFbm = (detailNoise.r * 0.625) + (detailNoise.g * 0.25) + (detailNoise.b * 0.125);
 
-    return baseCloudWithCoverage;
+    heightFraction = GetHeightFractionForPoint(pos,vec2(BOX_BOUNDS_MIN.y,BOX_BOUNDS_MAX.y));
+    
+    float highFrequencyNoiseModifier = mix(highFrequencyFbm, 1.0-highFrequencyFbm,clamp(heightFraction * 10.0,0,1));
+
+    float finalCloud = remap(baseCloudWithCoverage,highFrequencyNoiseModifier*0.2,1.0,0.0,1.0);
+
+    return finalCloud;
 }
 
 float getLightStrength(vec3 raySrc, int resolution)
@@ -124,7 +149,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,1*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
+        float nextDensity = sampleDensity(pos,100*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
 
         if(nextDensity>0)
         {

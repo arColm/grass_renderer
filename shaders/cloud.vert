@@ -3,21 +3,15 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 
+layout(buffer_reference, std430) readonly buffer VertexBuffer {
+	vec3 vertices[];
+};
 #include "0_scene_data.glsl"
+#include "_pushConstantsDraw.glsl"
 
 layout (location = 0) out vec3 outPosition;
 layout (location = 1) out vec3 outPlayerPos;
 
-layout(buffer_reference, std430) readonly buffer VertexBuffer {
-	vec3 vertices[];
-};
-
-layout( push_constant ) uniform constants
-{
-	mat4 render_matrix;
-	vec4 playerPosition;
-	VertexBuffer vertexBuffer;
-} PushConstants;
 
 
 void main() {
