@@ -47,4 +47,6 @@ private:
 	std::shared_ptr<MeshAsset> _cloudMesh;
 	VkPipelineLayout _cloudPipelineLayout;
 	VkPipeline _cloudPipeline;
+
+	VkSampler _sampler;
 };

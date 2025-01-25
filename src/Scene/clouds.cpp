@@ -27,6 +27,22 @@ void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 void CloudMesh::init(VulkanEngine* engine)
 {
 	_engine = engine;
+
+	/*
+	*  SAMPLER
+	*/
+	VkSamplerCreateInfo samplerCreateInfo{};
+	samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerCreateInfo.pNext = nullptr;
+	samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+	samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+	samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+	vkCreateSampler(engine->_device, &samplerCreateInfo, nullptr, &_sampler);
+
+
 	/*
 	*  IMAGES
 	*/
@@ -347,10 +363,10 @@ void CloudMesh::init(VulkanEngine* engine)
 		//	writing to descriptor set
 		_cloudMapSamplerDescriptorSet = engine->_globalDescriptorAllocator.allocate(engine->_device, _cloudMapSamplerDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _baseNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.writeImage(1, _detailNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.writeImage(2, _fluidNoiseImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.writeImage(3, _weatherImage.imageView, engine->_defaultSampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(0, _baseNoiseImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(1, _detailNoiseImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(2, _fluidNoiseImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(3, _weatherImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.updateSet(engine->_device, _cloudMapSamplerDescriptorSet);
 	}
 
@@ -483,6 +499,8 @@ void CloudMesh::cleanup()
 	vmaDestroyImage(_engine->_allocator, _fluidNoiseImage.image, _fluidNoiseImage.allocation);
 	vkDestroyImageView(_engine->_device, _weatherImage.imageView, nullptr);
 	vmaDestroyImage(_engine->_allocator, _weatherImage.image, _weatherImage.allocation);
+
+	vkDestroySampler(_engine->_device, _sampler, nullptr);
 
 	vkDestroyPipelineLayout(_engine->_device, _cloudMapComputePipelineLayout, nullptr);
 	vkDestroyPipeline(_engine->_device, _cloudMapComputePipeline, nullptr);

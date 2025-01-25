@@ -71,11 +71,11 @@ float sampleDensity(vec3 pos,vec3 offset)
         (pos.y+offset.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
         (pos.z+offset.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
     );
-    vec4 weather = texture(weatherMap,fract(uv.xz),0);
+    vec4 weather = texture(weatherMap,uv.xz*0.87,0);
     uv *= vec3(FREQUENCY,1,FREQUENCY);
-    uv = fract(uv);
+    //uv = fract(uv);
     vec4 detailNoise = texture(detailNoise,uv * 0.1,0);
-    vec4 fluidNoise = texture(fluidNoise,uv.xz,0);
+    vec4 fluidNoise = texture(fluidNoise,uv.xz*1.14,0);
 
     vec4 lowFrequencyNoises = texture(baseNoise,uv,0);
     float lowFrequencyFbm = (lowFrequencyNoises.g * 0.625) + (lowFrequencyNoises.b * 0.25) + (lowFrequencyNoises.a * 0.125);
