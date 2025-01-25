@@ -28,7 +28,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 //	float coverage;
 //} PushConstants;
 
-const float LIGHT_ABSORPTION = 0.3; //less = darker - consider using this in weather map in 1 channel
+const float LIGHT_ABSORPTION = 1.3; //greater = darker - consider using this in weather map in 1 channel
 const float DARKNESS_THRESHOLD = 0.1;
 //TODO : currently hard coded
 const vec3 BOX_BOUNDS_MIN = vec3(-600,0.0,-600);
@@ -62,7 +62,7 @@ float GetHeightFractionForPoint(vec3 pos, vec2 cloudMinMax)
 //from Real-Time Volumetric Cloudscapes GPU Chapter 4
 float HenyeyGreenstein(vec3 dirToLight, vec3 viewDir, float G)
 {
-    //G = [0,1] - typically 0.2 is fine
+    //G = [0,1] - typically 0.2-0.4 is fine
     float cosAngle = dot(dirToLight,viewDir);
     return ( (1.0-G*G)/pow((1.0+G*G-2.0*G*cosAngle),3.0/2.0) )/4.0*3.1415;
 }
@@ -117,8 +117,9 @@ float sampleDensity(vec3 pos,vec3 offset)
 
 float getLightStrength(vec3 raySrc, int resolution)
 {
-    vec3 dirToLight = -sceneData.sunlightDirection.xyz;
-    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,1.0/dirToLight).y;
+    vec3 lightDir = -sceneData.sunlightDirection.xyz;
+    lightDir *= sign(lightDir.y);
+    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,1.0/lightDir).y;
 
     float stepSize = dstInsideBox / resolution;
     float density = 0;
@@ -127,11 +128,14 @@ float getLightStrength(vec3 raySrc, int resolution)
 
     for(int i=0;i<resolution;i++)
     {
-        pos += dirToLight * stepSize;
+        pos += lightDir * stepSize;
         density += max(0,sampleDensity(pos,vec3(0))*stepSize);
     }
 
-    float transmittance = exp(-density * LIGHT_ABSORPTION);
+    float beer = exp(-density * LIGHT_ABSORPTION);
+    float powder = 1.0 - exp(-density * 2.0);
+    float transmittance = 2.0*beer*powder;
+
     return DARKNESS_THRESHOLD + transmittance * (1-DARKNESS_THRESHOLD);
 
     
@@ -142,6 +146,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     float density = 0;
     vec3 rayDir = normalize(rayHit-raySrc);
     vec3 lightDir = normalize(-sceneData.sunlightDirection.xyz);
+    lightDir *= sign(lightDir.y);
 
     vec2 boxIntersectInfo = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,rayDir);
     float dstToBox = boxIntersectInfo.x;
@@ -163,10 +168,10 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
 
         if(nextDensity>0)
         {
-            float lightTransmittance = getLightStrength(pos,5);
             float hg = HenyeyGreenstein(lightDir,rayDir,PushConstants.data.y);
-            light += nextDensity * transmittance * lightTransmittance *20/resolution * hg;
-            transmittance *= exp(-nextDensity * stepSize * LIGHT_ABSORPTION);
+            float lightTransmittance = getLightStrength(pos,5) * hg;
+            light += nextDensity * transmittance * lightTransmittance *stepSize;
+            transmittance *= exp(-nextDensity * stepSize);
         }
         if(transmittance < 0.01) break;
 
@@ -175,7 +180,11 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     light = clamp(light,0,1);
     transmittance = 1-clamp(transmittance,0,1);
     //light = 1;
-    vec4 color = vec4(0,0,0,1.0) * transmittance + (vec4(sceneData.sunlightColor.xyz,0) * light);
+    float lightStrength = sceneData.sunlightDirection.y<0? 1.0:0.2;
+    vec3 lightColor = sceneData.sunlightDirection.y<0? 
+        mix(vec3(0.961,0.792,0.502),sceneData.sunlightColor.xyz,-sceneData.sunlightDirection.y) : 
+        vec3(0.855,0.91,0.91);
+    vec4 color = vec4(0,0,0,1.0) * transmittance + (vec4(lightColor,0) * light * lightStrength);
 
     return color;
 }
