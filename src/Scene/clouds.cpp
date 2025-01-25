@@ -482,8 +482,8 @@ void CloudMesh::drawGUI()
 	if (ImGui::Begin("cloud settings"))
 	{
 		ImGui::SliderFloat("coverage", &_cloudCoverage, 0., 1.);
-		ImGui::SliderFloat("min", &_min, 0., 200.);
-		ImGui::SliderFloat("max", &_max, 0., 200.);
+		ImGui::SliderFloat("hg", &_min, 0., 1.);
+		ImGui::SliderFloat("max", &_max, 0., 1.);
 		ImGui::End();
 	}
 

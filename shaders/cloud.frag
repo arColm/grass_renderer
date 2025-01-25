@@ -59,12 +59,22 @@ float GetHeightFractionForPoint(vec3 pos, vec2 cloudMinMax)
     return clamp(heightFraction,0,1);
 }
 
+//from Real-Time Volumetric Cloudscapes GPU Chapter 4
+float HenyeyGreenstein(vec3 dirToLight, vec3 viewDir, float G)
+{
+    //G = [0,1] - typically 0.2 is fine
+    float cosAngle = dot(dirToLight,viewDir);
+    return ( (1.0-G*G)/pow((1.0+G*G-2.0*G*cosAngle),3.0/2.0) )/4.0*3.1415;
+}
+
 float sampleDensity(vec3 pos,vec3 offset)
 {
     const float FREQUENCY = 8.0;
     //const vec3 size = imageSize(cloudMap);
     //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
 
+    float heightFraction = GetHeightFractionForPoint(pos,vec2(BOX_BOUNDS_MIN.y,BOX_BOUNDS_MAX.y));
+    pos += vec3(10,0,10) * heightFraction;
     const ivec3 size = textureSize(baseNoise, 0);
     vec3 uv = vec3(
         (pos.x+offset.x-BOX_BOUNDS_MIN.x) / (BOX_BOUNDS_MAX.x-BOX_BOUNDS_MIN.x),
@@ -81,7 +91,6 @@ float sampleDensity(vec3 pos,vec3 offset)
     float lowFrequencyFbm = (lowFrequencyNoises.g * 0.625) + (lowFrequencyNoises.b * 0.25) + (lowFrequencyNoises.a * 0.125);
     float baseCloud = remap(lowFrequencyNoises.r,-(1.0-lowFrequencyFbm),1.0, 0.0, 1.0);
     
-    float heightFraction = GetHeightFractionForPoint(pos,vec2(BOX_BOUNDS_MIN.y,BOX_BOUNDS_MAX.y));
 
 
     baseCloud *= heightFraction;
@@ -132,6 +141,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
 {
     float density = 0;
     vec3 rayDir = normalize(rayHit-raySrc);
+    vec3 lightDir = normalize(-sceneData.sunlightDirection.xyz);
 
     vec2 boxIntersectInfo = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,rayDir);
     float dstToBox = boxIntersectInfo.x;
@@ -153,8 +163,9 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
 
         if(nextDensity>0)
         {
-            float lightTransmittance = getLightStrength(pos,10);
-            light += nextDensity * transmittance * lightTransmittance *20/resolution;
+            float lightTransmittance = getLightStrength(pos,5);
+            float hg = HenyeyGreenstein(lightDir,rayDir,PushConstants.data.y);
+            light += nextDensity * transmittance * lightTransmittance *20/resolution * hg;
             transmittance *= exp(-nextDensity * stepSize * LIGHT_ABSORPTION);
         }
         if(transmittance < 0.01) break;
@@ -195,7 +206,7 @@ void main() {
     //float cloud = getCloudDensity(inPlayerPos,inPosition,50);
 	//outFragColor = vec4(1,1,1,cloud);
 
-    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,50);
+    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,100);
     outFragColor = cloudColor;
 
     outNormal = vec4(0,-1,0,1);
