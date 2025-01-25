@@ -22,8 +22,12 @@ private:
 	struct CloudSettingsPushConstants
 	{
 		float coverage;
+		float min;
+		float max;
 	};
 	float _cloudCoverage = 0.5f;
+	float _min = 0.f;
+	float _max = 50.f;
 
 	VulkanEngine* _engine;
 

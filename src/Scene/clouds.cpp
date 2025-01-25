@@ -237,15 +237,15 @@ void CloudMesh::init(VulkanEngine* engine)
 	MeshAsset meshAsset{};
 
 	const std::vector<glm::vec4> vertices{
-		glm::vec4(-RENDER_DISTANCE * 2, 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, -RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(-RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(RENDER_DISTANCE * 2 , 50.9f, RENDER_DISTANCE * 2 ,1.0f),
+		glm::vec4(-RENDER_DISTANCE, 50.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 50.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(-RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 50.9f, RENDER_DISTANCE,1.0f),
 
-		glm::vec4(-RENDER_DISTANCE * 2, 80.9f, -RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(RENDER_DISTANCE * 2 , 80.9f, -RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(-RENDER_DISTANCE * 2 , 80.9f, RENDER_DISTANCE * 2 ,1.0f),
-		glm::vec4(RENDER_DISTANCE * 2 , 80.9f, RENDER_DISTANCE * 2 ,1.0f)
+		glm::vec4(-RENDER_DISTANCE, 100.9f, -RENDER_DISTANCE  ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 100.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(-RENDER_DISTANCE , 100.9f, RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 100.9f, RENDER_DISTANCE ,1.0f)
 	};
 	const std::vector<uint32_t> indices({
 		0,1,2,
@@ -447,9 +447,11 @@ int CloudMesh::draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstant
 {
 	CloudSettingsPushConstants settings;
 	settings.coverage = (-_cloudCoverage + 0.5f) * 2;
+	settings.min = _min;
+	settings.max = _max;
 
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
-	pushConstants.data = glm::vec4(settings.coverage, settings.coverage, settings.coverage, settings.coverage);
+	pushConstants.data = glm::vec4(settings.coverage, settings.min, settings.max, settings.coverage);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 0, 1, sceneDataDescriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _cloudPipelineLayout, 1, 1, &_cloudMapSamplerDescriptorSet, 0, nullptr);
@@ -464,6 +466,8 @@ void CloudMesh::drawGUI()
 	if (ImGui::Begin("cloud settings"))
 	{
 		ImGui::SliderFloat("coverage", &_cloudCoverage, 0., 1.);
+		ImGui::SliderFloat("min", &_min, 0., 200.);
+		ImGui::SliderFloat("max", &_max, 0., 200.);
 		ImGui::End();
 	}
 

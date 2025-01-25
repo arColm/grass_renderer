@@ -361,8 +361,6 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _skyboxMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _skyboxMesh->surfaces[0].count, 1, _skyboxMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _skyboxMesh->surfaces[0].count / 3 * 1;
-	//draw clouds
-	UI_triangleCount += _clouds.draw(&sceneDataDescriptorSet, pushConstants, cmd);
 	//draw mesh
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
@@ -437,6 +435,8 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, _waterMesh->surfaces[0].count, 1, _waterMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _waterMesh->surfaces[0].count / 3 * 1;
 
+	//draw clouds
+	UI_triangleCount += _clouds.draw(&sceneDataDescriptorSet, pushConstants, cmd);
 	vkCmdEndRendering(cmd);
 }
 

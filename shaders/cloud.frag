@@ -30,6 +30,9 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 
 const float LIGHT_ABSORPTION = 0.3; //less = darker - consider using this in weather map in 1 channel
 const float DARKNESS_THRESHOLD = 0.1;
+//TODO : currently hard coded
+const vec3 BOX_BOUNDS_MIN = vec3(-600,0.0,-600);
+const vec3 BOX_BOUNDS_MAX = vec3(600,50.0,600);
 
 //inspired from https://github.com/SebLague/Clouds
 vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir)
@@ -48,9 +51,6 @@ vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir
     return vec2(dstToBox, dstInsideBox);
 }
 
-//TODO : currently hard coded
-const vec3 BOX_BOUNDS_MIN = vec3(-1200,50.9,-1200);
-const vec3 BOX_BOUNDS_MAX = vec3(1200,80.9,1200);
 
 // Fractional value for sample position in the cloud layer.
 float GetHeightFractionForPoint(vec3 pos, vec2 cloudMinMax)
@@ -101,7 +101,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     
     float highFrequencyNoiseModifier = mix(highFrequencyFbm, 1.0-highFrequencyFbm,clamp(heightFraction * 10.0,0,1));
 
-    float finalCloud = remap(baseCloudWithCoverage,highFrequencyNoiseModifier*0.2,1.0,0.0,1.0);
+    float finalCloud = remap(baseCloudWithCoverage,highFrequencyNoiseModifier*0.5,1.0,0.0,1.0);
 
     return finalCloud;
 }
@@ -149,7 +149,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,100*vec3(sceneData.time.x,0,sceneData.time.x))*stepSize;
+        float nextDensity = sampleDensity(pos,10*vec3(sceneData.time.x,sceneData.time.x,sceneData.time.x))*stepSize;
 
         if(nextDensity>0)
         {
