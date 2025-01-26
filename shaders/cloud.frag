@@ -173,7 +173,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
         if(nextDensity>0)
         {
             float hg = HenyeyGreenstein(lightDir,rayDir,PushConstants.data.y);
-            float lightTransmittance = getLightStrength(pos,5) * hg;
+            float lightTransmittance = getLightStrength(pos,10) * hg;
             light += nextDensity * transmittance * lightTransmittance *stepSize;
             transmittance *= exp(-nextDensity * stepSize);
         }
@@ -227,7 +227,7 @@ void main() {
     //float cloud = getCloudDensity(inPlayerPos,inPosition,50);
 	//outFragColor = vec4(1,1,1,cloud);
     vec3 inPlayerPos = PushConstants.playerPosition.xyz;
-    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,200);
+    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,100);
     //cloudColor += vec4(0.1,0.1,0.1,0.5);
     outFragColor = cloudColor;
 

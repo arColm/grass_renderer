@@ -274,13 +274,13 @@ void CloudMesh::init(VulkanEngine* engine)
 		4,5,1,
 
 		0,4,2,
-		4,5,2,
+		4,6,2,
 
 		3,7,1,
-		7,1,5,
+		7,5,1,
 
 		3,7,2,
-		7,2,6
+		7,6,2
 		});
 
 	const size_t vertexBufferSize = vertices.size() * sizeof(glm::vec4);
