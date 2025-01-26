@@ -1711,7 +1711,7 @@ void VulkanEngine::initSceneData()
 			glm::radians(70.f),
 			(float)_windowExtent.width / (float)_windowExtent.height,
 			//10000.f,0.1f); //reverse depth for better precision near 0? (TODO: not working?)
-			0.1f, 600.f);
+			0.1f, RENDER_DISTANCE*2.f);
 	_sceneData.proj[1][1] *= -1;
 
 	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);

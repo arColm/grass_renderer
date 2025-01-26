@@ -38,7 +38,8 @@ void main() {
 		n.g = worleyFbm(p/freq,4.);
 		n.b = worleyFbm(p/freq,8.);
 		n.a = worleyFbm(p/freq,16.);
-		n.r = remap(fbmN, 0., 1., n.g, 1.); // perlin-worley
+		//n.r = remap(fbmN, 0., 1., n.g, 1.); // perlin-worley
+		n.r = (((fbmN-n.g)/(1.0-n.g))*(2.0));
 		imageStore(baseNoise,texelCoord,n);
 	}
 

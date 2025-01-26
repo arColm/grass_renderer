@@ -15,7 +15,6 @@ layout(set = 1, binding = 3) uniform sampler2D weatherMap;
 float PI = 3.1415926;
 
 layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inPlayerPos;
 
 #include "_fragOutput.glsl"
 layout(buffer_reference, std430) readonly buffer VertexBuffer {
@@ -28,11 +27,11 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 //	float coverage;
 //} PushConstants;
 
-const float LIGHT_ABSORPTION = 1.3; //greater = darker - consider using this in weather map in 1 channel
+const float LIGHT_ABSORPTION = 6.1; //greater = darker - consider using this in weather map in 1 channel
 const float DARKNESS_THRESHOLD = 0.1;
 //TODO : currently hard coded
-const vec3 BOX_BOUNDS_MIN = vec3(-600,0.0,-600);
-const vec3 BOX_BOUNDS_MAX = vec3(600,50.0,600);
+const vec3 BOX_BOUNDS_MIN = vec3(-600,80.0,-600);
+const vec3 BOX_BOUNDS_MAX = vec3(600,200.0,600);
 
 //inspired from https://github.com/SebLague/Clouds
 vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir)
@@ -51,6 +50,11 @@ vec2 rayBoxIntersect(vec3 boundsMin, vec3 boundsMax, vec3 rayOrigin, vec3 rayDir
     return vec2(dstToBox, dstInsideBox);
 }
 
+float GetDensityHeightGradientForPoint(float heightFraction)
+{
+    //return -pow(2*heightFraction-1,2)+1;
+    return 2.0*exp(-heightFraction) * (1.0-exp(-heightFraction*2));
+}
 
 // Fractional value for sample position in the cloud layer.
 float GetHeightFractionForPoint(vec3 pos, vec2 cloudMinMax)
@@ -74,6 +78,8 @@ float sampleDensity(vec3 pos,vec3 offset)
     //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
 
     float heightFraction = GetHeightFractionForPoint(pos,vec2(BOX_BOUNDS_MIN.y,BOX_BOUNDS_MAX.y));
+    float densityHeightGradient = GetDensityHeightGradientForPoint(heightFraction);
+
     pos += vec3(10,0,10) * heightFraction;
     const ivec3 size = textureSize(baseNoise, 0);
     vec3 uv = vec3(
@@ -93,7 +99,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     
 
 
-    baseCloud *= heightFraction;
+    baseCloud *= densityHeightGradient;
 
     //coverage
     float coverage = weather.r;
@@ -119,7 +125,7 @@ float getLightStrength(vec3 raySrc, int resolution)
 {
     vec3 lightDir = -sceneData.sunlightDirection.xyz;
     lightDir *= sign(lightDir.y);
-    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,1.0/lightDir).y;
+    float dstInsideBox = rayBoxIntersect(BOX_BOUNDS_MIN,BOX_BOUNDS_MAX,raySrc,lightDir).y;
 
     float stepSize = dstInsideBox / resolution;
     float density = 0;
@@ -154,7 +160,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
 
     float distanceTravelled = 0;
     float stepSize = dstInsideBox / resolution;
-    float distanceLimit = min(distance(rayHit,raySrc),dstInsideBox);
+    float distanceLimit = dstInsideBox;//min(distance(rayHit,raySrc),dstInsideBox);
 
     //if(dstToBox==0) return 0;
 
@@ -164,7 +170,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,10*vec3(sceneData.time.x,sceneData.time.x,sceneData.time.x))*stepSize;
+        float nextDensity = sampleDensity(pos,10*vec3(sceneData.time.x,-sceneData.time.x,sceneData.time.x))*stepSize;
 
         if(nextDensity>0)
         {
@@ -180,10 +186,18 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     light = clamp(light,0,1);
     transmittance = 1-clamp(transmittance,0,1);
     //light = 1;
-    float lightStrength = sceneData.sunlightDirection.y<0? 1.0:0.2;
-    vec3 lightColor = sceneData.sunlightDirection.y<0? 
-        mix(vec3(0.961,0.792,0.502),sceneData.sunlightColor.xyz,-sceneData.sunlightDirection.y) : 
-        vec3(0.855,0.91,0.91);
+    float lightParam = clamp(sceneData.sunlightDirection.y,-1,1);
+    lightParam = pow(lightParam,3);
+    float lightStrength = mix(1.0,0.2,lightParam);
+    vec3 lightColor = 
+        mix(
+        mix(
+            vec3(0.961,0.792,0.502),
+            sceneData.sunlightColor.xyz,
+            clamp(-lightParam,0,1)
+        ),
+        vec3(0.855,0.91,0.91),
+        (lightParam+1)*0.5);
     vec4 color = vec4(0,0,0,1.0) * transmittance + (vec4(lightColor,0) * light * lightStrength);
 
     return color;
@@ -214,8 +228,9 @@ void main() {
     
     //float cloud = getCloudDensity(inPlayerPos,inPosition,50);
 	//outFragColor = vec4(1,1,1,cloud);
-
-    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,100);
+    vec3 inPlayerPos = PushConstants.playerPosition.xyz;
+    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,400);
+    //cloudColor += vec4(0.1,0.1,0.1,0.5);
     outFragColor = cloudColor;
 
     outNormal = vec4(0,-1,0,1);

@@ -253,15 +253,15 @@ void CloudMesh::init(VulkanEngine* engine)
 	MeshAsset meshAsset{};
 
 	const std::vector<glm::vec4> vertices{
-		glm::vec4(-RENDER_DISTANCE, 50.9f, -RENDER_DISTANCE ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 50.9f, -RENDER_DISTANCE ,1.0f),
-		glm::vec4(-RENDER_DISTANCE , 50.9f, RENDER_DISTANCE ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 50.9f, RENDER_DISTANCE,1.0f),
+		glm::vec4(-RENDER_DISTANCE, 80.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 80.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(-RENDER_DISTANCE , 80.9f, RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 80.9f, RENDER_DISTANCE,1.0f),
 
-		glm::vec4(-RENDER_DISTANCE, 100.9f, -RENDER_DISTANCE  ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 100.9f, -RENDER_DISTANCE ,1.0f),
-		glm::vec4(-RENDER_DISTANCE , 100.9f, RENDER_DISTANCE ,1.0f),
-		glm::vec4(RENDER_DISTANCE , 100.9f, RENDER_DISTANCE ,1.0f)
+		glm::vec4(-RENDER_DISTANCE, 200.9f, -RENDER_DISTANCE  ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 200.9f, -RENDER_DISTANCE ,1.0f),
+		glm::vec4(-RENDER_DISTANCE , 200.9f, RENDER_DISTANCE ,1.0f),
+		glm::vec4(RENDER_DISTANCE , 200.9f, RENDER_DISTANCE ,1.0f)
 	};
 	const std::vector<uint32_t> indices({
 		0,1,2,

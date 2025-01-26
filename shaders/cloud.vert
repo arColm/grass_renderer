@@ -10,7 +10,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 #include "_pushConstantsDraw.glsl"
 
 layout (location = 0) out vec3 outPosition;
-layout (location = 1) out vec3 outPlayerPos;
+//layout (location = 1) out vec3 outPlayerPos;
 
 
 
@@ -24,5 +24,5 @@ void main() {
 	//gl_Position = sceneData.viewProj * position;
 
 	outPosition = position.xyz;
-	outPlayerPos = PushConstants.playerPosition.xyz;
+	//outPlayerPos = PushConstants.playerPosition.xyz;
 }
