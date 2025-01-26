@@ -31,15 +31,15 @@ void main() {
 		const float freq = 128.;
 		vec3 p = vec3(texelCoord);///size;
 
-		float fbmN = mix(1.,fbm3D(p/freq,7,4,1.0,2.0,exp2(-.85)),.5);
-		fbmN = abs(fbmN * 2. - 1.);
+		float fbmN = mix(1.,fbm3D(p/freq,7,4,1.0,2.0,exp2(-.85)),1.0);
+		//fbmN = abs(fbmN * 2. - 1.);
 
 		vec4 n;
 		n.g = worleyFbm(p/freq,4.);
 		n.b = worleyFbm(p/freq,8.);
 		n.a = worleyFbm(p/freq,16.);
-		//n.r = remap(fbmN, 0., 1., n.g, 1.); // perlin-worley
-		n.r = (((fbmN-n.g)/(1.0-n.g))*(2.0));
+		n.r = remap(fbmN, 0., 1., n.g, 1.); // perlin-worley
+		//n.r = ((((fbmN-n.g+1)*0.5)/(1.0-n.g))*(0.5));
 		imageStore(baseNoise,texelCoord,n);
 	}
 

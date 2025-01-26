@@ -462,7 +462,8 @@ void CloudMesh::init(VulkanEngine* engine)
 int CloudMesh::draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd)
 {
 	CloudSettingsPushConstants settings;
-	settings.coverage = (-_cloudCoverage + 0.5f) * 2;
+	//settings.coverage = (-_cloudCoverage + 0.5f) * 2;
+	settings.coverage = (_cloudCoverage-1.1)*5.;
 	settings.hgConstant = _hgConstant;
 
 	pushConstants.vertexBuffer = _cloudMesh->meshBuffers.vertexBufferAddress;
@@ -480,7 +481,7 @@ void CloudMesh::drawGUI()
 {
 	if (ImGui::Begin("cloud settings"))
 	{
-		ImGui::SliderFloat("coverage", &_cloudCoverage, 0., 1.);
+		ImGui::SliderFloat("coverage", &_cloudCoverage, 0, 1.);
 		ImGui::SliderFloat("hg", &_hgConstant, 0., 1.);
 		ImGui::End();
 	}

@@ -27,8 +27,8 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 //	float coverage;
 //} PushConstants;
 
-const float LIGHT_ABSORPTION = 6.1; //greater = darker - consider using this in weather map in 1 channel
-const float DARKNESS_THRESHOLD = 0.1;
+const float LIGHT_ABSORPTION = 9.1; //greater = darker - consider using this in weather map in 1 channel
+const float DARKNESS_THRESHOLD = 0.5;
 //TODO : currently hard coded
 const vec3 BOX_BOUNDS_MIN = vec3(-600,80.0,-600);
 const vec3 BOX_BOUNDS_MAX = vec3(600,200.0,600);
@@ -100,14 +100,12 @@ float sampleDensity(vec3 pos,vec3 offset)
 
 
     baseCloud *= densityHeightGradient;
-
     //coverage
     float coverage = weather.r;
     coverage = remap(coverage,PushConstants.data.x,1,0,1);
-    //coverage = clamp(coverage,0,1);
+    coverage = clamp(coverage,0,1);
     float baseCloudWithCoverage = remap(baseCloud,coverage,1.0,0.0,1.0);
     baseCloudWithCoverage *= coverage;
-    
     // adding noise
     pos.xz += fluidNoise.xy * (1.0-heightFraction);
     float highFrequencyFbm = (detailNoise.r * 0.625) + (detailNoise.g * 0.25) + (detailNoise.b * 0.125);
@@ -116,7 +114,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     
     float highFrequencyNoiseModifier = mix(highFrequencyFbm, 1.0-highFrequencyFbm,clamp(heightFraction * 10.0,0,1));
 
-    float finalCloud = remap(baseCloudWithCoverage,highFrequencyNoiseModifier*0.5,1.0,0.0,1.0);
+    float finalCloud = remap(baseCloudWithCoverage,highFrequencyNoiseModifier*0.3,1.0,0.0,1.0);
 
     return finalCloud;
 }
@@ -139,8 +137,8 @@ float getLightStrength(vec3 raySrc, int resolution)
     }
 
     float beer = exp(-density * LIGHT_ABSORPTION);
-    float powder = 1.0 - exp(-density * 2.0);
-    float transmittance = 2.0*beer*powder;
+    float powder = 1.0 - exp2(-density);
+    float transmittance = 1.0*beer*powder;
 
     return DARKNESS_THRESHOLD + transmittance * (1-DARKNESS_THRESHOLD);
 
@@ -184,7 +182,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
         distanceTravelled += stepSize;
     }
     light = clamp(light,0,1);
-    transmittance = 1-clamp(transmittance,0,1);
+    transmittance = 1.0-clamp(transmittance,0,1);
     //light = 1;
     float lightParam = clamp(sceneData.sunlightDirection.y,-1,1);
     lightParam = pow(lightParam,3);
@@ -229,7 +227,7 @@ void main() {
     //float cloud = getCloudDensity(inPlayerPos,inPosition,50);
 	//outFragColor = vec4(1,1,1,cloud);
     vec3 inPlayerPos = PushConstants.playerPosition.xyz;
-    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,400);
+    vec4 cloudColor = getCloudColor(inPlayerPos,inPosition,200);
     //cloudColor += vec4(0.1,0.1,0.1,0.5);
     outFragColor = cloudColor;
 
