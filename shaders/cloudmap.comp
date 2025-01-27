@@ -79,7 +79,7 @@ void main() {
 	size2d = imageSize(weatherMap);
 	if(texelCoord.x < size2d.x && texelCoord.z < size2d.y)
 	{
-		const float freq = 256.;
+		const float freq = 512.;
 		ivec2 p = ivec2(texelCoord.xz);///size;
 		
 		float fbmN = mix(1.,fbm3D(vec3(p/freq,0),7,4,1.0,2.0,exp2(-.85)),.5);
