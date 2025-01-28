@@ -105,6 +105,9 @@
     <ClCompile Include="src\Scene\clouds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\image_loading\video_loader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="thirdparty\imgui\imconfig.h">
@@ -174,6 +177,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\vk_engine_settings.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image_loading\video_loader.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -8,6 +8,7 @@
 #include "../vk_images.hpp"
 #include "../../thirdparty/imgui/imgui.h"
 #include <iostream>
+#include "../image_loading/video_loader.hpp"
 
 void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 {
@@ -22,6 +23,49 @@ void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _cloudMapComputePipelineLayout, 0, 1, &_cloudMapDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _cloudMapComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	vkCmdDispatch(cmd, std::ceil(RENDER_DISTANCE * 2 / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 1.0f), std::ceil(RENDER_DISTANCE*2 / 16.0f));
+}
+
+void CloudMesh::updateWeather(VulkanEngine* engine, VkCommandBuffer cmd)
+{
+	vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	std::vector<float> frameData = VideoLoader::getVideoFrameBW("/assets/badapple.mp4", currentVideoFrame);
+	currentVideoFrame++;
+	const size_t bufferSize = frameData.size() * sizeof(float);
+
+
+	AllocatedBuffer staging = engine->createBuffer(
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data;
+	vmaMapMemory(engine->_allocator, staging.allocation, &data);
+
+	//copy buffer
+	memcpy(data, frameData.data(), bufferSize);
+
+	//	note:	with this we have to wait for GPU commmands to finish before uploading
+	//			usually we have a DEDICATED BACKGROUND THREAD/COMMAND BUFFER to handle transfers
+	VkBufferImageCopy copyInfo{};
+	copyInfo.bufferOffset = 0;
+	copyInfo.bufferImageHeight = 0;
+	copyInfo.bufferRowLength = 0;
+	copyInfo.imageOffset = { 0,0,0 };
+	copyInfo.imageExtent = _weatherImage.imageExtent;
+	copyInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyInfo.imageSubresource.baseArrayLayer = 0;
+	copyInfo.imageSubresource.layerCount = 1;
+	copyInfo.imageSubresource.mipLevel = 0;
+	
+	VkBufferCopy vertexCopy{ 0 };
+	vertexCopy.dstOffset = 0;
+	vertexCopy.srcOffset = 0;
+	vertexCopy.size = bufferSize;
+	vkCmdCopyBufferToImage(cmd, staging.buffer, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1, &copyInfo);
+
+	engine->destroyBuffer(staging);
+
+	vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void CloudMesh::init(VulkanEngine* engine)
@@ -144,7 +188,7 @@ void CloudMesh::init(VulkanEngine* engine)
 		};
 
 		//hardcoding draw format to 32 bit float
-		_weatherImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		_weatherImage.imageFormat = VK_FORMAT_R8_UNORM;
 		_weatherImage.imageExtent = imageExtent;
 
 		VkImageUsageFlags imageUsageFlags{};
