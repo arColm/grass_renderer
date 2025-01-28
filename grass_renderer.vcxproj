@@ -111,8 +111,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;SDL2.lib;SDL2main.lib;opencv_world4110.lib;opencv_world4110d.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\vulkan\libraries;D:\vulkan\VulkanSDK\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;SDL2.lib;SDL2main.lib;opencv_world4110d.lib;opencv_video4100.lib;opencv_videoio4100.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\vulkan\libraries;D:\vulkan\VulkanSDK\Lib;D:\vulkan\opencv\build\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

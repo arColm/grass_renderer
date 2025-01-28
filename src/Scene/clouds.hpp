@@ -12,7 +12,7 @@ public:
 	static const int CLOUD_MAP_HEIGHT = 128;
 
 	void update(VulkanEngine* engine, VkCommandBuffer cmd);
-	void updateWeather(VulkanEngine* engine, VkCommandBuffer cmd);
+	void updateWeather(VulkanEngine* engine);
 	void init(VulkanEngine* engine);
 	int draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd); //returns number of tris
 

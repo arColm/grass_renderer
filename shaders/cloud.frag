@@ -82,12 +82,17 @@ float sampleDensity(vec3 pos,vec3 offset)
 
     pos += vec3(10,0,10) * heightFraction;
     const ivec3 size = textureSize(baseNoise, 0);
+    vec3 nonOffsetUv = vec3(
+        (pos.x-BOX_BOUNDS_MIN.x) / (BOX_BOUNDS_MAX.x-BOX_BOUNDS_MIN.x),
+        (pos.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
+        (pos.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
+    );
     vec3 uv = vec3(
         (pos.x+offset.x-BOX_BOUNDS_MIN.x) / (BOX_BOUNDS_MAX.x-BOX_BOUNDS_MIN.x),
         (pos.y+offset.y-BOX_BOUNDS_MIN.y) / (BOX_BOUNDS_MAX.y-BOX_BOUNDS_MIN.y),
         (pos.z+offset.z-BOX_BOUNDS_MIN.z) / (BOX_BOUNDS_MAX.z-BOX_BOUNDS_MIN.z)
     );
-    vec4 weather = texture(weatherMap,uv.xz*0.67,0);
+    vec4 weather = texture(weatherMap,nonOffsetUv.xz,0);
     uv *= vec3(FREQUENCY,1,FREQUENCY);
     //uv = fract(uv);
     vec4 detailNoise = texture(detailNoise,uv * 0.1,0);
@@ -103,7 +108,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     //coverage
     float coverage = weather.r;
     coverage = remap(coverage,PushConstants.data.x,1,0,1);
-    coverage = clamp(coverage,0,1);
+    coverage = 1-clamp(coverage,0,1);
     float baseCloudWithCoverage = remap(baseCloud,coverage,1.0,0.0,1.0);
     baseCloudWithCoverage *= coverage;
     // adding noise

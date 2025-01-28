@@ -362,9 +362,11 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, _skyboxMesh->surfaces[0].count, 1, _skyboxMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _skyboxMesh->surfaces[0].count / 3 * 1;
 	//draw mesh
+	/*
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	//draw loaded test mesh
+	
 	pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
 	{
@@ -387,16 +389,19 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += testMeshes[2]->surfaces[0].count / 3 * 1;
 	//
+	*/
 	pushConstants.worldMatrix = glm::translate(glm::vec3(0));
 
 	//draw ground
+	/*
 	pushConstants.vertexBuffer = _groundMesh->meshBuffers.vertexBufferAddress;
 	vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _groundMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _groundMesh->surfaces[0].count, 1, _groundMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _groundMesh->surfaces[0].count / 3 * 1;
-
+	*/
 	//draw grass
+	/*
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _grassPipeline);
 
 	pushConstants.vertexBuffer = _grassMesh->meshBuffers.vertexBufferAddress;
@@ -413,12 +418,13 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 
 	vkCmdDrawIndexed(cmd, _grassMesh->surfaces[0].count, _grassCount, _grassMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _grassMesh->surfaces[0].count / 3 * _grassCount;
-
+	*/
 	//
 	//	TRANSPARENT MESHES
 	//
 	
 	//water
+	/*
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipeline);
 	{
 		VkDescriptorSet sets[] = {
@@ -434,7 +440,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBindIndexBuffer(cmd, _waterMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _waterMesh->surfaces[0].count, 1, _waterMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _waterMesh->surfaces[0].count / 3 * 1;
-
+	*/
 	//draw clouds
 	UI_triangleCount += _clouds.draw(&sceneDataDescriptorSet, pushConstants, cmd);
 	vkCmdEndRendering(cmd);
@@ -863,6 +869,7 @@ void VulkanEngine::updateScene(float deltaTime)
 		_sceneData.sunViewProj[i] = _shadowMapSceneData[i].viewProj;
 	}
 	_sceneData.time = glm::vec4(_time, _time / 2, 0, 0);
+	_clouds.updateWeather(this);
 }
 
 void VulkanEngine::updateWindMap(VkCommandBuffer cmd)
@@ -1703,7 +1710,7 @@ void VulkanEngine::initDefaultData()
 
 void VulkanEngine::initSceneData()
 {
-	_player._position = glm::vec3(0, 5, 0);
+	_player._position = glm::vec3(0, 500, 0);
 
 	_sceneData = SceneData{};
 	_sceneData.view = _player.getViewMatrix();

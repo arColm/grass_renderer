@@ -25,13 +25,11 @@ void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil(RENDER_DISTANCE * 2 / 16.0f), std::ceil(CLOUD_MAP_HEIGHT / 1.0f), std::ceil(RENDER_DISTANCE*2 / 16.0f));
 }
 
-void CloudMesh::updateWeather(VulkanEngine* engine, VkCommandBuffer cmd)
+void CloudMesh::updateWeather(VulkanEngine* engine)
 {
-	vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	std::vector<float> frameData = VideoLoader::getVideoFrameBW("/assets/badapple.mp4", currentVideoFrame);
+	std::vector<float> frameData = VideoLoader::getVideoFrameBW("./assets/badapple.mp4", currentVideoFrame);
 	currentVideoFrame++;
 	const size_t bufferSize = frameData.size() * sizeof(float);
-
 
 	AllocatedBuffer staging = engine->createBuffer(
 		bufferSize,
@@ -46,26 +44,26 @@ void CloudMesh::updateWeather(VulkanEngine* engine, VkCommandBuffer cmd)
 
 	//	note:	with this we have to wait for GPU commmands to finish before uploading
 	//			usually we have a DEDICATED BACKGROUND THREAD/COMMAND BUFFER to handle transfers
-	VkBufferImageCopy copyInfo{};
-	copyInfo.bufferOffset = 0;
-	copyInfo.bufferImageHeight = 0;
-	copyInfo.bufferRowLength = 0;
-	copyInfo.imageOffset = { 0,0,0 };
-	copyInfo.imageExtent = _weatherImage.imageExtent;
-	copyInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	copyInfo.imageSubresource.baseArrayLayer = 0;
-	copyInfo.imageSubresource.layerCount = 1;
-	copyInfo.imageSubresource.mipLevel = 0;
-	
-	VkBufferCopy vertexCopy{ 0 };
-	vertexCopy.dstOffset = 0;
-	vertexCopy.srcOffset = 0;
-	vertexCopy.size = bufferSize;
-	vkCmdCopyBufferToImage(cmd, staging.buffer, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1, &copyInfo);
+	engine->immediateSubmit([&](VkCommandBuffer cmd) {
+		vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		VkBufferImageCopy copyInfo{};
+		copyInfo.bufferOffset = 0;
+		copyInfo.bufferImageHeight = 0;
+		copyInfo.bufferRowLength = 0;
+		copyInfo.imageOffset = { 0,0,0 };
+		copyInfo.imageExtent = _weatherImage.imageExtent;
+		copyInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyInfo.imageSubresource.baseArrayLayer = 0;
+		copyInfo.imageSubresource.layerCount = 1;
+		copyInfo.imageSubresource.mipLevel = 0;
 
+		vkCmdCopyBufferToImage(cmd, staging.buffer, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyInfo);
+		vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+
+		});
+	vmaUnmapMemory(engine->_allocator, staging.allocation);
 	engine->destroyBuffer(staging);
 
-	vkutil::transitionImage(cmd, _weatherImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void CloudMesh::init(VulkanEngine* engine)
@@ -181,18 +179,24 @@ void CloudMesh::init(VulkanEngine* engine)
 		VK_CHECK(vkCreateImageView(engine->_device, &viewInfo, nullptr, &_fluidNoiseImage.imageView));
 	}
 	{
+		//VkExtent3D imageExtent = {
+		//	RENDER_DISTANCE*2,
+		//	RENDER_DISTANCE * 2,
+		//	1
+		//};
+
 		VkExtent3D imageExtent = {
-			RENDER_DISTANCE*2,
-			RENDER_DISTANCE * 2,
+			256,
+			256,
 			1
 		};
 
 		//hardcoding draw format to 32 bit float
-		_weatherImage.imageFormat = VK_FORMAT_R8_UNORM;
+		_weatherImage.imageFormat = VK_FORMAT_R32_SFLOAT;
 		_weatherImage.imageExtent = imageExtent;
 
 		VkImageUsageFlags imageUsageFlags{};
-		imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;			//compute shader can write to image
+		imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;			//compute shader can write to image
 		if (bUseValidationLayers) imageUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
 		VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(_weatherImage.imageFormat, imageUsageFlags, imageExtent, VK_IMAGE_TYPE_2D);
