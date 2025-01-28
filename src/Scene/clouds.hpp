@@ -26,7 +26,7 @@ private:
 		float coverage;
 		float hgConstant;
 	};
-	float _cloudCoverage = 0.7f;
+	float _cloudCoverage = 1.0f;
 	float _hgConstant = 0.1f;
 
 	VulkanEngine* _engine;

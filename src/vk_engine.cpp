@@ -1710,7 +1710,7 @@ void VulkanEngine::initDefaultData()
 
 void VulkanEngine::initSceneData()
 {
-	_player._position = glm::vec3(0, 500, 0);
+	_player._position = glm::vec3(0, 1000, 0);
 
 	_sceneData = SceneData{};
 	_sceneData.view = _player.getViewMatrix();
@@ -1722,7 +1722,8 @@ void VulkanEngine::initSceneData()
 	_sceneData.proj[1][1] *= -1;
 
 	_sceneData.ambientColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.1f);
-	_sceneData.sunlightDirection = glm::vec4(2, -2, 0, 1);
+	_sceneData.sunlightDirection = glm::rotate(5 * 0.3f, glm::vec3(1, 0, 0))* glm::vec4(1, 1, 0, 1);
+	_sceneData.sunlightDirection.w = -_sceneData.sunlightDirection.y;
 	_sceneData.sunlightColor = glm::vec4(1, 1, 1, 1);
 	_sceneData.viewProj = _sceneData.proj*_sceneData.view;
 

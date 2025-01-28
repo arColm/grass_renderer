@@ -73,7 +73,7 @@ float HenyeyGreenstein(vec3 dirToLight, vec3 viewDir, float G)
 
 float sampleDensity(vec3 pos,vec3 offset)
 {
-    const float FREQUENCY = 8.0;
+    const float FREQUENCY = 2.0;
     //const vec3 size = imageSize(cloudMap);
     //return imageLoad(cloudMap,ivec3(abs(pos) - abs(pos/size))).r;
 
@@ -108,7 +108,7 @@ float sampleDensity(vec3 pos,vec3 offset)
     //coverage
     float coverage = weather.r;
     coverage = remap(coverage,PushConstants.data.x,1,0,1);
-    coverage = 1-clamp(coverage,0,1);
+    coverage = clamp(coverage,0,1);
     float baseCloudWithCoverage = remap(baseCloud,coverage,1.0,0.0,1.0);
     baseCloudWithCoverage *= coverage;
     // adding noise
@@ -173,7 +173,7 @@ vec4 getCloudColor(vec3 raySrc, vec3 rayHit, int resolution)
     while(distanceTravelled < distanceLimit)
     {
         vec3 pos = raySrc + rayDir * (dstToBox + distanceTravelled);
-        float nextDensity = sampleDensity(pos,10*vec3(sceneData.time.x,-sceneData.time.x,sceneData.time.x))*stepSize;
+        float nextDensity = sampleDensity(pos,100*vec3(sceneData.time.x,-sceneData.time.x,sceneData.time.x))*stepSize;
 
         if(nextDensity>0)
         {
