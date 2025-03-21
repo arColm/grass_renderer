@@ -1703,7 +1703,7 @@ void VulkanEngine::initDefaultData()
 
 void VulkanEngine::initSceneData()
 {
-	_player._position = glm::vec3(0, 5, 0);
+	_player._position = glm::vec3(20, 25, 0);
 
 	_sceneData = SceneData{};
 	_sceneData.view = _player.getViewMatrix();
@@ -2887,7 +2887,7 @@ void VulkanEngine::initSkybox()
 
 void VulkanEngine::initWater()
 {
-	static const int WATER_DISTANCE = 60;
+	static const int WATER_DISTANCE = 120;
 	static const int WATER_QUALITY = 4;
 	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
