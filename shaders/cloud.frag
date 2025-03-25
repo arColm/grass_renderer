@@ -97,7 +97,8 @@ float sampleDensity(vec3 pos,vec3 offset)
     float lowFrequencyFbm = (lowFrequencyNoises.g * 0.625) + (lowFrequencyNoises.b * 0.25) + (lowFrequencyNoises.a * 0.125);
     float baseCloud = remap(lowFrequencyNoises.r,-(1.0-lowFrequencyFbm),1.0, 0.0, 1.0);
     
-
+    float centerDistanceMult = clamp(60000.0/(1+pos.x*pos.x+pos.z*pos.z),0,1);
+    baseCloud *= centerDistanceMult;
 
     baseCloud *= densityHeightGradient;
     //coverage

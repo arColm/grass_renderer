@@ -1744,10 +1744,11 @@ void VulkanEngine::cleanupScene()
 
 void VulkanEngine::initGround()
 {
+	const int GROUND_QUALITY = 2;
 	GPUMeshBuffers meshBuffers{};
 	MeshAsset meshAsset{};
 
-	uint32_t numVerticesPerSide = (RENDER_DISTANCE * 2 + 2);
+	uint32_t numVerticesPerSide = (RENDER_DISTANCE * GROUND_QUALITY + 2);
 	const size_t vertexBufferSize = numVerticesPerSide * numVerticesPerSide;
 	const size_t indexBufferSize = (numVerticesPerSide - 1) * (numVerticesPerSide - 1) * 6;
 	meshBuffers.vertexBuffer = createBuffer(vertexBufferSize * sizeof(Vertex),
@@ -1829,7 +1830,7 @@ void VulkanEngine::initGround()
 		VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computeVertexPipeline));
 
 		ComputeVertexPushConstants pushConstants{};
-		pushConstants.data = glm::vec4(numVerticesPerSide,2,0,0);
+		pushConstants.data = glm::vec4(numVerticesPerSide, GROUND_QUALITY,0,0);
 		pushConstants.vertexBuffer = meshBuffers.vertexBufferAddress;
 
 		////clean structures
