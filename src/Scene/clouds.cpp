@@ -193,7 +193,7 @@ void CloudMesh::init(VulkanEngine* engine)
 
 	//	PIPELINE
 	VkShaderModule computeShader;
-	if (!vkutil::loadShaderModule("./shaders/cloudmap.comp.spv", engine->_device, &computeShader))
+	if (!vkutil::loadShaderModule("./shaders/scene/cloudmap.comp.spv", engine->_device, &computeShader))
 	{
 		fmt::print("error when building cloudmap compute shader module\n");
 	}
@@ -371,7 +371,7 @@ void CloudMesh::init(VulkanEngine* engine)
 	}
 
 	VkShaderModule fragShader;
-	if (!vkutil::loadShaderModule("./shaders/cloud.frag.spv", engine->_device, &fragShader))
+	if (!vkutil::loadShaderModule("./shaders/scene/cloud.frag.spv", engine->_device, &fragShader))
 	{
 		fmt::print("error when building cloud fragmentshader module");
 	}
@@ -380,7 +380,7 @@ void CloudMesh::init(VulkanEngine* engine)
 		fmt::print("cloud fragment shader loaded");
 	}
 	VkShaderModule vertShader;
-	if (!vkutil::loadShaderModule("./shaders/cloud.vert.spv", engine->_device, &vertShader))
+	if (!vkutil::loadShaderModule("./shaders/scene/cloud.vert.spv", engine->_device, &vertShader))
 	{
 		fmt::print("error when building cloud vertex shader module");
 	}

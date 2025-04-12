@@ -137,6 +137,7 @@
     <ClCompile Include="src\noise.cpp" />
     <ClCompile Include="src\player.cpp" />
     <ClCompile Include="src\Scene\clouds.cpp" />
+    <ClCompile Include="src\Scene\water.cpp" />
     <ClCompile Include="src\vk_buffers.cpp" />
     <ClCompile Include="src\vk_descriptors.cpp" />
     <ClCompile Include="src\vk_engine.cpp" />
@@ -167,6 +168,7 @@
     <ClInclude Include="src\noise.hpp" />
     <ClInclude Include="src\player.hpp" />
     <ClInclude Include="src\Scene\clouds.hpp" />
+    <ClInclude Include="src\Scene\water.hpp" />
     <ClInclude Include="src\vk_buffers.hpp" />
     <ClInclude Include="src\vk_descriptors.hpp" />
     <ClInclude Include="src\vk_engine.hpp" />
@@ -188,9 +190,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\0_scene_data.glsl" />
-    <None Include="shaders\cloud.frag" />
-    <None Include="shaders\cloud.vert" />
-    <None Include="shaders\cloudmap.comp" />
     <None Include="shaders\deferred.comp" />
     <None Include="shaders\gradient.comp" />
     <None Include="shaders\gradient_color.comp" />

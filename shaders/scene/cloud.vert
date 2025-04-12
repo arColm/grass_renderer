@@ -6,8 +6,8 @@
 layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	vec3 vertices[];
 };
-#include "0_scene_data.glsl"
-#include "_pushConstantsDraw.glsl"
+#include "../0_scene_data.glsl"
+#include "../_pushConstantsDraw.glsl"
 
 layout (location = 0) out vec3 outPosition;
 //layout (location = 1) out vec3 outPlayerPos;

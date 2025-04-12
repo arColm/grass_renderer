@@ -7,7 +7,7 @@ layout(rgba16f,set = 0, binding = 1) uniform image3D detailNoise;
 layout(rgba16f,set = 0, binding = 2) uniform image2D fluidNoise;
 layout(rgba16f,set = 0, binding = 3) uniform image2D weatherMap;
 
-#include "noise.glsl"
+#include "../noise.glsl"
 
 
 //push constants block

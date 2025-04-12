@@ -3,8 +3,8 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 
-#include "0_scene_data.glsl"
-#include "noise.glsl"
+#include "../0_scene_data.glsl"
+#include "../noise.glsl"
 
 //layout(rgba16f, set = 1, binding = 0) readonly uniform image3D cloudMap;
 layout(set = 1, binding = 0) uniform sampler3D baseNoise;
@@ -16,12 +16,12 @@ float PI = 3.1415926;
 
 layout (location = 0) in vec3 inPosition;
 
-#include "_fragOutput.glsl"
+#include "../_fragOutput.glsl"
 layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	vec3 vertices[];
 };
 
-#include "_pushConstantsDraw.glsl"
+#include "../_pushConstantsDraw.glsl"
 //layout( push_constant ) uniform constants
 //{
 //	float coverage;

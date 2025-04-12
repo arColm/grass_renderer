@@ -105,6 +105,9 @@
     <ClCompile Include="src\Scene\clouds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Scene\water.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="thirdparty\imgui\imconfig.h">
@@ -176,6 +179,9 @@
     <ClInclude Include="src\vk_engine_settings.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Scene\water.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\gradient.comp">
@@ -229,12 +235,6 @@
     <None Include="shaders\skybox.vert">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="shaders\cloud.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\cloud.vert">
-      <Filter>Shader Files</Filter>
-    </None>
     <None Include="shaders\water_mesh_indices.comp">
       <Filter>Shader Files</Filter>
     </None>
@@ -251,9 +251,6 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="shaders\_fragOutput.glsl">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\cloudmap.comp">
       <Filter>Shader Files</Filter>
     </None>
     <None Include="shaders\_pushConstantsDraw.glsl">
