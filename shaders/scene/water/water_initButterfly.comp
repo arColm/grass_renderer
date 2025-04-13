@@ -1,0 +1,46 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba16f,set = 0, binding = 0) uniform image2D butterflyTex;
+layout(rgba16f,set = 0, binding = 1) uniform image2D posSpectrumTex;
+layout(rgba16f,set = 0, binding = 2) uniform image2D negSpectrumTex;
+layout(rgba16f,set = 0, binding = 3) uniform image2D noiseTex;
+
+//push constants block
+layout( push_constant ) uniform constants
+{
+	//data1.x == time
+	vec4 data1;
+	vec4 data2;
+	vec4 data3;
+	vec4 data4;
+} PushConstants;
+
+
+
+const float PI = 3.1415926;
+
+vec2 ComplexExp(vec2 a)
+{
+    return vec2(cos(a.y), sin(a.y)) * exp(a.x);
+}
+
+vec2 ComplexMul(vec2 a, vec2 b)
+{
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+void main()
+{
+	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(butterflyTex);
+	if(texelCoord.x < size.x && texelCoord.y <= size.y/2)
+	{
+		uint b = size.y >> (texelCoord.x + 1);
+		vec2 exponent = 2 * PI * vec2(0,1) / size.y;
+		uint i = (2*b*(texelCoord.y/b)+texelCoord.y%b) %size.y;
+		vec2 twiddle = ComplexExp(-exponent * ((texelCoord.y/b)*b));
+		imageStore(butterflyTex,texelCoord,vec4(twiddle.x,twiddle.y, i, i+b));
+		imageStore(butterflyTex,ivec2(texelCoord.x,texelCoord.y + size.y/2),vec4(-twiddle.x,-twiddle.y, i, i+b));
+	}
+}

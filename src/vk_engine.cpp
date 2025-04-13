@@ -148,7 +148,6 @@ void VulkanEngine::draw()
 	vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	updateWindMap(cmd);
 	updateGrassData(cmd);
-	//updateClouds(cmd);
 
 	//calculate shadow map
 	vkutil::transitionImage(cmd, _shadowMapImageArray.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -435,6 +434,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, _waterMesh->surfaces[0].count, 1, _waterMesh->surfaces[0].startIndex, 0, 0);
 	UI_triangleCount += _waterMesh->surfaces[0].count / 3 * 1;
 
+	//UI_triangleCount += _water.draw(&sceneDataDescriptorSet, pushConstants, cmd);
 	//draw clouds
 	UI_triangleCount += _clouds.draw(&sceneDataDescriptorSet, pushConstants, cmd);
 	vkCmdEndRendering(cmd);
@@ -1697,7 +1697,6 @@ void VulkanEngine::initDefaultData()
 	initGrass();
 	initWindMap();
 	initSkybox();
-	//initClouds();
 	initWater();
 }
 
@@ -1735,11 +1734,13 @@ void VulkanEngine::initSceneData()
 void VulkanEngine::initScene()
 {
 	_clouds.init(this);
+	_water.init(this);
 }
 
 void VulkanEngine::cleanupScene()
 {
 	_clouds.cleanup();
+	_water.cleanup();
 }
 
 void VulkanEngine::initGround()

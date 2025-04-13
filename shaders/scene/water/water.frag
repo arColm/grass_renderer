@@ -3,7 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 
-#include "0_scene_data.glsl"
+#include "../../0_scene_data.glsl"
 
 const int SHADOW_CASCADE_COUNT = 3;
 
@@ -15,7 +15,7 @@ layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 inPlayerPos;
 layout (location = 4) in vec3 inPos;
 
-#include "_fragOutput.glsl"
+#include "../../_fragOutput.glsl"
 
 float ShadowCalculation() 
 {

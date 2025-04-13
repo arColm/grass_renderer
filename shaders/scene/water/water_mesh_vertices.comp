@@ -4,9 +4,7 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-#include "_vertex.glsl"
-
-layout(rgba16f, set = 0, binding = 0) uniform image2D heightMap;
+#include "../../_vertex.glsl"
 
 layout(buffer_reference, std430) writeonly buffer VertexBuffer {
 	Vertex vertices[];
@@ -21,26 +19,10 @@ layout( push_constant ) uniform constants
 	VertexBuffer vertexBuffer;
 } PushConstants;
 
-vec4 getHeightData(vec2 p, ivec2 mapCenter) {
-	vec2 samplePoint = p + mapCenter;
-	vec2 fractional = fract(samplePoint);
-
-	ivec2 texCoord = ivec2(floor(samplePoint));
-
-	vec4 bl = imageLoad(heightMap, texCoord);
-	vec4 tl = imageLoad(heightMap, texCoord+ivec2(0,1));
-	vec4 br = imageLoad(heightMap, texCoord+ivec2(1,0));
-	vec4 tr = imageLoad(heightMap, texCoord+ivec2(1,1));
-
-	return mix(mix(bl,tl,fractional.y),mix(br,tr,fractional.y),fractional.x);
-}
-
 //called once per vertex (x,y)
 void main() {
 	int numVerticesPerSide = int(PushConstants.data.x);
 	int size = numVerticesPerSide * numVerticesPerSide;
-	ivec2 mapSize = imageSize(heightMap);
-	ivec2 mapCenter = mapSize/2;
 	float terrainQuality = PushConstants.data.y;
 
 	
@@ -50,20 +32,14 @@ void main() {
 	float x = (float(gl_GlobalInvocationID.x) - PushConstants.data.x/2)/terrainQuality;
 	float z = (float(gl_GlobalInvocationID.y) - PushConstants.data.x/2)/terrainQuality;
 
-	//vec4 mapData = imageLoad(heightMap,mapCenter+ivec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)-numVerticesPerSide);
-	//vec4 mapData = getHeightData(vec2(gl_GlobalInvocationID.x,gl_GlobalInvocationID.y)/terrainQuality,mapCenter,numVerticesPerSide);
-	vec4 mapData = getHeightData(vec2(x,z),mapCenter);
 	float y = -0.5;
 
 	Vertex v;
 	v.position = vec3(x,y,z);
 	v.uv_x = 0;
 	v.uv_y = 0;
-	//v.normal = mapData.xyz;
 	v.normal = vec3(0,1,0);
 	v.color = vec4(0.471,0.529,0.788,0.55);
-	//v.color = vec4(0.14f,0.32f*(1+y/10),0.08f,1.0f);
-	//v.color = vec4(v.normal,1.0);
 	
 	uint vertexIndex = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * numVerticesPerSide;
 	PushConstants.vertexBuffer.vertices[vertexIndex] = v;

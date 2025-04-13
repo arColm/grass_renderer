@@ -3,8 +3,8 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 
-#include "0_scene_data.glsl"
-#include "noise.glsl"
+#include "../../0_scene_data.glsl"
+#include "../../noise.glsl"
 
 layout(rgba16f,set = 2, binding = 0) readonly uniform image2D WindMap;
 
@@ -26,7 +26,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 	Vertex vertices[];
 };
 
-#include "_pushConstantsDraw.glsl"
+#include "../../_pushConstantsDraw.glsl"
 
 vec3 getWindDirection(vec3 pos) {
 	//return imageLoad(WindMap,imageSize(WindMap)/2+ivec2(pos.x,pos.z)).xyz;

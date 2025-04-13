@@ -9,16 +9,18 @@ class WaterMesh
 {
 public:
 	static const unsigned int TEXTURE_SIZE = 512;
+	static const unsigned int MESH_SIZE = 120;
+	static const unsigned int MESH_QUALITY = 4;
 
 
-	void update(VulkanEngine* engine, VkCommandBuffer cmd);
+	void update(VkCommandBuffer cmd, float deltaTime);
 	void init(VulkanEngine* engine);
-	int draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd); //returns number of tris
+	int draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants); //returns number of tris
 	void cleanup();
 
 private:
 	VulkanEngine* _engine;
-
+	void createComputePipeline(const std::string& path, VkDescriptorSetLayout* layouts, int layoutCount, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline);
 	void initSampler();
 	void initImages();
 	void initDescriptors();
@@ -56,8 +58,10 @@ private:
 	VkPipeline _initSpectrumPipeline;
 	VkPipelineLayout _fourierPassPipelineLayout;
 	VkPipeline _fourierPassPipeline;
-	VkPipelineLayout _ifft2DPipelineLayout;
-	VkPipeline _ifft2DPipeline;
+	VkPipelineLayout _horizontalPassPipelineLayout;
+	VkPipeline _horizontalPassPipeline;
+	VkPipelineLayout _verticalPassPipelineLayout;
+	VkPipeline _verticalPassPipeline;
 	VkPipelineLayout _inversionPassPipelineLayout;
 	VkPipeline _inversionPassPipeline;
 	VkPipelineLayout _copyPassPipelineLayout;
@@ -73,10 +77,10 @@ private:
 	void initNoiseTexture();
 	void initSpectrumTextures();
 
-	void step(float deltaTime);
-	void fourierPass(float deltaTime);
-	void ifft2D(AllocatedImage& initialTexture);
-	void copyToResultTextures();
+	void step(VkCommandBuffer cmd);
+	void fourierPass(VkCommandBuffer cmd);
+	void ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture);
+	void copyToResultTextures(VkCommandBuffer cmd);
 	VkPipelineLayout _computeButterflyPipelineLayout;
 	VkPipeline _computeButterflyPipeline;
 	VkPipelineLayout _computeNoiseLayout;
@@ -94,7 +98,7 @@ private:
 	VkPipelineLayout _computeCopyResultsPipelineLayout;
 	VkPipeline _computeCopyResultsPipeline;
 
-	unsigned int logSize;
+	unsigned int _logSize;
 
 	VkSampler _sampler;
 };

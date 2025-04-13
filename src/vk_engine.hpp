@@ -7,6 +7,7 @@
 #include "vk_engine_settings.hpp"
 
 #include "./Scene/clouds.hpp"
+#include "Scene/water.hpp"
 
 
 class VulkanEngine
@@ -231,6 +232,9 @@ public:
 	std::shared_ptr<MeshAsset> _skyboxMesh;
 	VkPipelineLayout _skyboxPipelineLayout;
 	VkPipeline _skyboxPipeline; 
+
+	//water
+	WaterMesh _water;
 
 	//clouds
 	CloudMesh _clouds;

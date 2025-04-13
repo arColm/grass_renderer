@@ -235,18 +235,6 @@
     <None Include="shaders\skybox.vert">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="shaders\water_mesh_indices.comp">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\water_mesh_vertices.comp">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\water.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="shaders\water.vert">
-      <Filter>Shader Files</Filter>
-    </None>
     <None Include="shaders\deferred.comp">
       <Filter>Shader Files</Filter>
     </None>
@@ -254,6 +242,42 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="shaders\_pushConstantsDraw.glsl">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_copyResults.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_fourierPass.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_horizontalPass.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_initButterfly.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_initNoise.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_initSpectrums.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_inversionPass.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_mesh_indices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_mesh_vertices.comp">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="shaders\scene\water\water_verticalPass.comp">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>
