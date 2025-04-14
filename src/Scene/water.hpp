@@ -8,10 +8,22 @@
 class WaterMesh
 {
 public:
+	struct DisplaySettings
+	{
+		float scale;
+		float windSpeed;
+		float windDirection;
+		float fetch;
+		float spreadBlend;
+		float swell;
+		float peakEnhancement;
+		float shortWavesFade;
+	};
 	static const unsigned int TEXTURE_SIZE = 512;
 	static const unsigned int MESH_SIZE = 120;
 	static const unsigned int MESH_QUALITY = 4;
 
+	DisplaySettings settings[2];
 
 	void update(VkCommandBuffer cmd, float deltaTime);
 	void init(VulkanEngine* engine);
@@ -19,8 +31,22 @@ public:
 	void cleanup();
 
 private:
+	struct SpectrumSettings
+	{
+		float scale;
+		float angle;
+		float spreadBlend;
+		float swell;
+		float alpha;
+		float peakOmega;
+		float gamma;
+		float shortWavesFade;
+	};
+	SpectrumSettings spectrumParams[2];
+
 	VulkanEngine* _engine;
 	void createComputePipeline(const std::string& path, VkDescriptorSetLayout* layouts, int layoutCount, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline);
+	void initSettings();
 	void initSampler();
 	void initImages();
 	void initDescriptors();

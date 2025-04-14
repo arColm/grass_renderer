@@ -4,6 +4,7 @@
 #include "../vk_initializers.hpp"
 #include "../vk_pipelines.hpp"
 #include "../vk_images.hpp"
+#include "../vk_buffers.hpp"
 #include <iostream>
 
 void WaterMesh::update(VkCommandBuffer cmd, float deltaTime)
@@ -15,6 +16,7 @@ void WaterMesh::init(VulkanEngine* engine)
 {
 	_engine = engine;
 	_logSize = (int) std::log2(TEXTURE_SIZE);
+	initSettings();
 	initSampler();
 	initImages();
 	initDescriptors();
@@ -100,7 +102,7 @@ void WaterMesh::initImages()
 		TEXTURE_SIZE,
 		1
 	};
-	_fourierDx_DzImage.imageFormat = VK_FORMAT_R16G16_SFLOAT;
+	_fourierDx_DzImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	_fourierDx_DzImage.imageExtent = imageExtent;
 	imgInfo = vkinit::imageCreateInfo(_fourierDx_DzImage.imageFormat, imageUsageFlags, imageExtent);
 	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_fourierDx_DzImage.image, &_fourierDx_DzImage.allocation, nullptr);
@@ -149,7 +151,7 @@ void WaterMesh::initImages()
 	viewInfo = vkinit::imageViewCreateInfo(_negSpectrumImage.imageFormat, _negSpectrumImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_negSpectrumImage.imageView));
 
-	_turbulenceImage.imageFormat = VK_FORMAT_R16_SFLOAT;
+	_turbulenceImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	_turbulenceImage.imageExtent = _displacementImage.imageExtent;
 	imgInfo = vkinit::imageCreateInfo(_turbulenceImage.imageFormat, imageUsageFlags, imageExtent);
 	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_turbulenceImage.image, &_turbulenceImage.allocation, nullptr);
@@ -186,6 +188,7 @@ void WaterMesh::initDescriptors()
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //posspec
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //negspec
 		builder.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //noise
+		builder.addBinding(4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER); //noise
 		_computeResourceDescriptorLayout = builder.build(_engine->_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 	//	writing to descriptor set
@@ -213,6 +216,7 @@ void WaterMesh::initDescriptors()
 		writer.writeImage(1, _posSpectrumImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.writeImage(2, _negSpectrumImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.writeImage(3, _noiseImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.writeBuffer(4, _spectrumParamsBuffer.buffer, 2 * sizeof(SpectrumSettings), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		writer.updateSet(_engine->_device, _computeResourceDescriptorSet);
 	}
 }
@@ -262,6 +266,67 @@ void WaterMesh::createComputePipeline(const std::string& path, VkDescriptorSetLa
 
 	vkDestroyShaderModule(_engine->_device, shader, nullptr);
 }
+
+float JonswapAlpha(float g, float fetch, float windSpeed)
+{
+	return 0.076f * std::pow(g * fetch / windSpeed / windSpeed, -0.22f);
+}
+
+float JonswapPeakFrequency(float g, float fetch, float windSpeed)
+{
+	return 22 * std::pow(windSpeed * fetch / g / g, -0.33f);
+}
+
+void WaterMesh::initSettings()
+{
+	const float g = 9.81f;
+	settings[0].scale = 1;
+	settings[0].windSpeed = 555555;
+	settings[0].windDirection = 40;
+	settings[0].shortWavesFade = 0.01f;
+	settings[0].fetch = 5555;
+	settings[0].peakEnhancement = 5;
+	settings[0].spreadBlend = 1;
+	settings[0].swell = 1;
+	for (int i = 0; i <= 1; i++)
+	{
+		spectrumParams[i].scale = settings[i].scale;
+		spectrumParams[i].angle = settings[i].windDirection / 180 * M_PI;
+		spectrumParams[i].spreadBlend = settings[i].spreadBlend;
+		spectrumParams[i].swell = std::clamp(settings[i].swell, 0.01f, 1.0f);
+		spectrumParams[i].alpha = JonswapAlpha(g, settings[i].fetch, settings[i].windSpeed);
+		spectrumParams[i].peakOmega = JonswapPeakFrequency(g, settings[i].fetch, settings[i].windSpeed);
+		spectrumParams[i].gamma = settings[i].peakEnhancement;
+		spectrumParams[i].shortWavesFade = settings[i].shortWavesFade;
+	}
+
+	_spectrumParamsBuffer = vkutil::createBuffer(_engine->_allocator, 2 * sizeof(SpectrumSettings), 
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	AllocatedBuffer staging = vkutil::createBuffer(
+		_engine->_allocator,
+		2 * sizeof(SpectrumSettings),
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data;
+	vmaMapMemory(_engine->_allocator, staging.allocation, &data);
+	
+	memcpy(data, spectrumParams, 2* sizeof(SpectrumSettings));
+
+	//	note:	with this we have to wait for GPU commmands to finish before uploading
+	//			usually we have a DEDICATED BACKGROUND THREAD/COMMAND BUFFER to handle transfers
+	_engine->immediateSubmit([&](VkCommandBuffer cmd) {
+		VkBufferCopy copy{ 0 };
+		copy.dstOffset = 0;
+		copy.srcOffset = 0;
+		copy.size = 2 * sizeof(SpectrumSettings);
+		vkCmdCopyBuffer(cmd, staging.buffer, _spectrumParamsBuffer.buffer, 1, &copy);
+		});
+
+	vmaUnmapMemory(_engine->_allocator, staging.allocation);
+	_engine->destroyBuffer(staging);
+}
+
 
 void WaterMesh::initPipelines()
 {
@@ -617,11 +682,14 @@ void WaterMesh::cleanup()
 
 void WaterMesh::initButterflyTexture()
 {
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_engine->_time, 1, 1, 1);
 	_engine->immediateSubmit(
 		[&](VkCommandBuffer cmd) {
 			vkutil::transitionImage(cmd, _butterflyImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initButterflyPipeline);
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initButterflyPipelineLayout, 0, 1, &_computeResourceDescriptorSet, 0, nullptr);
+			vkCmdPushConstants(cmd, _initButterflyPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 			vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 		}
 	);
@@ -629,11 +697,15 @@ void WaterMesh::initButterflyTexture()
 
 void WaterMesh::initNoiseTexture()
 {
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_engine->_time, 1, 1, 1);
+
 	_engine->immediateSubmit(
 		[&](VkCommandBuffer cmd) {
 			vkutil::transitionImage(cmd, _noiseImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initNoisePipeline);
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initNoisePipelineLayout, 0, 1, &_computeResourceDescriptorSet, 0, nullptr);
+			vkCmdPushConstants(cmd, _initNoisePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 			vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 		}
 	);
@@ -641,12 +713,17 @@ void WaterMesh::initNoiseTexture()
 
 void WaterMesh::initSpectrumTextures()
 {
+	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_engine->_time, 1, 1, 1);
+	pushConstants.data2 = glm::vec4(500, 1, 1, 1);
+
 	_engine->immediateSubmit(
 		[&](VkCommandBuffer cmd) {
 			vkutil::transitionImage(cmd, _posSpectrumImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 			vkutil::transitionImage(cmd, _negSpectrumImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initSpectrumPipeline);
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _initSpectrumPipelineLayout, 0, 1, &_computeResourceDescriptorSet, 0, nullptr);
+			vkCmdPushConstants(cmd, _initSpectrumPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 			vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 		}
 	);

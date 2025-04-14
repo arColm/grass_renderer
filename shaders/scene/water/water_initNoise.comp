@@ -2,10 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba16f,set = 0, binding = 0) uniform image2D butterflyTex;
-layout(rgba16f,set = 0, binding = 1) uniform image2D posSpectrumTex;
-layout(rgba16f,set = 0, binding = 2) uniform image2D negSpectrumTex;
-layout(rgba16f,set = 0, binding = 3) uniform image2D noiseTex;
+#include "computeResources.glsl"
 
 //push constants block
 layout( push_constant ) uniform constants
@@ -18,7 +15,32 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 
+const float PI = 3.1415926;
+
+float random(vec2 st, vec3 seed) {
+    return fract(sin(dot(st.xy,
+        vec2(seed.x, seed.y))) *
+        seed.z);
+}
+
 void main()
 {
+	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(noiseTex);
+	if(id.x < size.x && id.y < size.y)
+	{
+		float r0 = random(vec2(id.xy) / size.x, vec3(12.9898, 78.233, 43758.5453123));
+		float r1 = random(vec2(id.xy) / size.x, vec3(25.342, 65.234, 15234.234569));
 
+		r0 = clamp(r0, 0.001, 1.0);
+		r1 = clamp(r1, 0.001, 1.0);
+
+		float mag0 = sqrt(-2.0 * log(r0));
+		float z00 = mag0 * cos(2 * PI * r1) + 0;
+		float z01 = mag0 * sin(2 * PI * r1) + 0;
+		float mag1 = sqrt(-2.0 * log(r1));
+		float z10 = mag1 * cos(2 * PI * r0) + 0;
+		float z11 = mag1 * sin(2 * PI * r0) + 0;
+		imageStore(noiseTex,id,vec4(z00, z01, z10, z11));
+	}
 }
