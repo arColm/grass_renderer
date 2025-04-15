@@ -619,24 +619,11 @@ void WaterMesh::initMesh()
 	meshAsset.meshBuffers = meshBuffers;
 
 	_waterMesh = std::make_shared<MeshAsset>(std::move(meshAsset));
-
-
-
-	_engine->_mainDeletionQueue.pushFunction(
-		[&]() {
-			_engine->destroyBuffer(_waterMesh->meshBuffers.vertexBuffer);
-			_engine->destroyBuffer(_waterMesh->meshBuffers.indexBuffer);
-
-		}
-	);
 }
 
 
 int WaterMesh::draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants)
 {
-	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipeline);
 	{
 		VkDescriptorSet sets[] = {
@@ -647,7 +634,7 @@ int WaterMesh::draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipelineLayout, 0, 3, sets, 0, nullptr);
 	}
 	pushConstants.vertexBuffer = _waterMesh->meshBuffers.vertexBufferAddress;
-	vkCmdPushConstants(cmd, _waterPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+	vkCmdPushConstants(cmd, _waterPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 	vkCmdBindIndexBuffer(cmd, _waterMesh->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, _waterMesh->surfaces[0].count, 1, _waterMesh->surfaces[0].startIndex, 0, 0);
 	return _waterMesh->surfaces[0].count;
