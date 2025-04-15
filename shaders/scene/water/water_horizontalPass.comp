@@ -2,18 +2,16 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba16f,set = 0, binding = 0) uniform image2D butterflyTex;
-layout(rgba16f,set = 0, binding = 1) uniform image2D posSpectrumTex;
-layout(rgba16f,set = 0, binding = 2) uniform image2D negSpectrumTex;
-layout(rgba16f,set = 0, binding = 3) uniform image2D noiseTex;
+#include "computeResources.glsl"
 
-layout(rg16f,set = 1, binding = 0) uniform image2D fourierTex;
-layout(rg16f,set = 1, binding = 1) uniform image2D pingpongTex;
+layout(rgba16f,set = 1, binding = 0) uniform image2D pingpong0Tex;
+layout(rgba16f,set = 1, binding = 1) uniform image2D pingpong1Tex;
 
 //push constants block
 layout( push_constant ) uniform constants
 {
 	//data1.x == time
+    //data2.xy = pingpong, stage
 	vec4 data1;
 	vec4 data2;
 	vec4 data3;
@@ -21,7 +19,47 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 
+const float PI = 3.1415926;
+vec2 ComplexExp(vec2 a)
+{
+    return vec2(cos(a.y), sin(a.y)) * exp(a.x);
+}
+
+vec2 ComplexMul(vec2 a, vec2 b)
+{
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
 void main()
 {
+	float pingpong = PushConstants.data2.x;
+    float stage = PushConstants.data2.y;
+    
+	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(noiseTex);
+	if(id.x < size.x && id.y < size.y)
+    {
+        if (pingpong == 0)
+        {
+            vec4 butterfly = imageLoad(butterflyTex,ivec2(stage,id.x));
+            vec2 p = imageLoad(pingpong0Tex,ivec2(butterfly.z,id.y)).xy;
+            vec2 q = imageLoad(pingpong0Tex,ivec2(butterfly.w,id.y)).xy;
+            vec2 w = butterfly.xy;
 
+            vec2 H = p + ComplexMul(w, q);
+
+            imageStore(pingpong1Tex,id.xy,vec4(H,0,0));
+        }
+        else
+        {
+            vec4 butterfly = imageLoad(butterflyTex,ivec2(stage,id.x));
+            vec2 p = imageLoad(pingpong1Tex,ivec2(butterfly.z,id.y)).xy;
+            vec2 q = imageLoad(pingpong1Tex,ivec2(butterfly.w,id.y)).xy;
+            vec2 w = butterfly.xy;
+
+            vec2 H = p + ComplexMul(w, q);
+
+            imageStore(pingpong0Tex,id.xy,vec4(H,0,0));
+        }
+    }
 }

@@ -7,7 +7,7 @@
 #include "../vk_buffers.hpp"
 #include <iostream>
 
-void WaterMesh::update(VkCommandBuffer cmd, float deltaTime)
+void WaterMesh::update(VkCommandBuffer cmd)
 {
 	step(cmd);
 }
@@ -26,6 +26,12 @@ void WaterMesh::init(VulkanEngine* engine)
 	initButterflyTexture();
 	initNoiseTexture();
 	initSpectrumTextures();
+
+	engine->immediateSubmit(
+		[&](VkCommandBuffer cmd) {
+			fourierPass(cmd);
+		}
+	);
 }
 
 void WaterMesh::initSampler()
@@ -612,6 +618,10 @@ void WaterMesh::initMesh()
 
 int WaterMesh::draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants)
 {
+
+	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipeline);
 	{
 		VkDescriptorSet sets[] = {
@@ -654,8 +664,6 @@ void WaterMesh::cleanup()
 	vmaDestroyImage(_engine->_allocator, _pingpongImage.image, _pingpongImage.allocation);
 	vkDestroyImageView(_engine->_device, _noiseImage.imageView, nullptr);
 	vmaDestroyImage(_engine->_allocator, _noiseImage.image, _noiseImage.allocation);
-	vkDestroyImageView(_engine->_device, _displacementImage.imageView, nullptr);
-	vmaDestroyImage(_engine->_allocator, _displacementImage.image, _displacementImage.allocation);
 
 	vkDestroySampler(_engine->_device, _sampler, nullptr);
 
@@ -678,6 +686,7 @@ void WaterMesh::cleanup()
 
 	_engine->destroyBuffer(_waterMesh->meshBuffers.vertexBuffer);
 	_engine->destroyBuffer(_waterMesh->meshBuffers.indexBuffer);
+	_engine->destroyBuffer(_spectrumParamsBuffer);
 }
 
 void WaterMesh::initButterflyTexture()
@@ -744,6 +753,8 @@ void WaterMesh::fourierPass(VkCommandBuffer cmd)
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(_engine->_time, 1, 1, 1);
 
+	vkutil::transitionImage(cmd, _posSpectrumImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _negSpectrumImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _fourierDx_DzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _fourierDy_DxdzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _fourierDxdx_DzdzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -759,10 +770,11 @@ void WaterMesh::ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture)
 {
 	bool pingpong = false;
 	ComputePushConstants pushConstants;
+	pushConstants.data1 = glm::vec4(_engine->_time, 0, 0, 1);
 
-	vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _butterflyImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _butterflyImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	{
 		_ifft2DDescriptorSet = _engine->_globalDescriptorAllocator.allocate(_engine->_device, _ifft2DDescriptorLayout);
 		DescriptorWriter writer;
@@ -777,12 +789,12 @@ void WaterMesh::ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture)
 
 	for (int i = 0; i < _logSize; i++)
 	{
-		pushConstants.data1 = glm::vec4(_engine->_time, pingpong? 1 : 0, i, 1);
+		pushConstants.data2 = glm::vec4(pingpong? 1 : 0, i, 0,0);
 		vkCmdPushConstants(cmd, _horizontalPassPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 		vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 
-		vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL); 
+		vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+		vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL); 
 		pingpong = !pingpong;
 	}
 
@@ -792,35 +804,37 @@ void WaterMesh::ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture)
 
 	for (int i = 0; i < _logSize; i++)
 	{
-		pushConstants.data1 = glm::vec4(_engine->_time, pingpong ? 1 : 0, i, 1);
+		pushConstants.data2 = glm::vec4(pingpong ? 1 : 0, i, 0, 0);
 		vkCmdPushConstants(cmd, _verticalPassPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 		vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 
-		vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+		vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 		pingpong = !pingpong;
 	}
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _inversionPassPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _inversionPassPipelineLayout, 0, 1, &_computeResourceDescriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _inversionPassPipelineLayout, 1, 1, &_ifft2DDescriptorSet, 0, nullptr);
-	pushConstants.data1 = glm::vec4(_engine->_time, pingpong ? 1 : 0, 0, 0);		
+	pushConstants.data1 = glm::vec4(_engine->_time, 0, 0, 0);
+	pushConstants.data2 = glm::vec4(pingpong ? 1 : 0, 0, 0, 0);
 	vkCmdPushConstants(cmd, _inversionPassPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 }
 
 void WaterMesh::copyToResultTextures(VkCommandBuffer cmd)
 {
-	vkutil::transitionImage(cmd, _fourierDx_DzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _fourierDy_DxdzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _fourierDxdx_DzdzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _fourierDydx_DydzImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _fourierDx_DzImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _fourierDy_DxdzImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _fourierDxdx_DzdzImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _fourierDydx_DydzImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	ComputePushConstants pushConstants;
-	pushConstants.data1 = glm::vec4(_engine->_time, 1, 0, 0);
+	pushConstants.data1 = glm::vec4(_engine->_time, 0, 0, 0);
+	pushConstants.data2 = glm::vec4(1, 0, 0, 0);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _copyPassPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _copyPassPipelineLayout, 0, 1, &_fourierDescriptorSet, 0, nullptr);

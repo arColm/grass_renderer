@@ -19,13 +19,13 @@ public:
 		float peakEnhancement;
 		float shortWavesFade;
 	};
-	static const unsigned int TEXTURE_SIZE = 512;
+	static const unsigned int TEXTURE_SIZE = 256;
 	static const unsigned int MESH_SIZE = 120;
 	static const unsigned int MESH_QUALITY = 4;
 
 	DisplaySettings settings[2];
 
-	void update(VkCommandBuffer cmd, float deltaTime);
+	void update(VkCommandBuffer cmd);
 	void init(VulkanEngine* engine);
 	int draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants); //returns number of tris
 	void cleanup();

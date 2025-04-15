@@ -2,19 +2,21 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rg16f,set = 0, binding = 0) uniform image2D fourierDx_DzTex;
-layout(rg16f,set = 0, binding = 1) uniform image2D fourierDy_DxdzTex;
-layout(rg16f,set = 0, binding = 2) uniform image2D fourierDxdx_DzdzTex;
-layout(rg16f,set = 0, binding = 3) uniform image2D fourierDydx_DydzTex;
+layout(rgba16f,set = 0, binding = 0) uniform image2D fourierDx_DzTex;
+layout(rgba16f,set = 0, binding = 1) uniform image2D fourierDy_DxdzTex;
+layout(rgba16f,set = 0, binding = 2) uniform image2D fourierDxdx_DzdzTex;
+layout(rgba16f,set = 0, binding = 3) uniform image2D fourierDydx_DydzTex;
+
 
 layout(rgba16f,set = 1, binding = 0) uniform image2D displacementTex;
 layout(rgba16f,set = 1, binding = 1) uniform image2D derivativesTex;
-layout(r16f,set = 1, binding = 2) uniform image2D turbulenceTex;
+layout(rgba16f,set = 1, binding = 2) uniform image2D turbulenceTex;
 
 //push constants block
 layout( push_constant ) uniform constants
 {
 	//data1.x == time
+	//data2.x == horizontalDisplacementMult
 	vec4 data1;
 	vec4 data2;
 	vec4 data3;
@@ -24,5 +26,21 @@ layout( push_constant ) uniform constants
 
 void main()
 {
+	float horizontalDisplacementMult = PushConstants.data2.x;
+	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(derivativesTex);
+	if(id.x<size.x && id.y < size.y)
+	{
+		vec2 Dx_Dz = imageLoad(fourierDx_DzTex,id.xy).xy;
+		vec2 Dy_Dxdz = vec2(1,horizontalDisplacementMult) * imageLoad(fourierDy_DxdzTex,id.xy).xy;
+		vec2 Dxdx_Dzdz = horizontalDisplacementMult * imageLoad(fourierDxdx_DzdzTex,id.xy).xy;
+		vec2 Dydx_Dydz = imageLoad(fourierDydx_DydzTex,id.xy).xy;
 
+		vec2 horizontalDisplacement = horizontalDisplacementMult * Dx_Dz;
+		float verticalDisplacement = Dy_Dxdz.x;
+
+		imageStore(displacementTex,id,vec4(horizontalDisplacement.x,verticalDisplacement,horizontalDisplacement.y, 1));
+		imageStore(turbulenceTex,id,vec4(Dy_Dxdz.y));
+		imageStore(derivativesTex,id,vec4(Dydx_Dydz.x, Dxdx_Dzdz.x, Dydx_Dydz.y, Dxdx_Dzdz.y));
+	}
 }

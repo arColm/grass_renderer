@@ -2,18 +2,17 @@
 #extension GL_GOOGLE_include_directive : require
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba16f,set = 0, binding = 0) uniform image2D butterflyTex;
-layout(rgba16f,set = 0, binding = 1) uniform image2D posSpectrumTex;
-layout(rgba16f,set = 0, binding = 2) uniform image2D negSpectrumTex;
-layout(rgba16f,set = 0, binding = 3) uniform image2D noiseTex;
+#include "computeResources.glsl"
 
-layout(rg16f,set = 1, binding = 0) uniform image2D fourierTex;
-layout(rg16f,set = 1, binding = 1) uniform image2D pingpongTex;
+layout(rgba16f,set = 1, binding = 0) uniform image2D pingpong0Tex;
+layout(rgba16f,set = 1, binding = 1) uniform image2D pingpong1Tex;
+
 
 //push constants block
 layout( push_constant ) uniform constants
 {
 	//data1.x == time
+    //data2.x = pingpong
 	vec4 data1;
 	vec4 data2;
 	vec4 data3;
@@ -23,5 +22,24 @@ layout( push_constant ) uniform constants
 
 void main()
 {
-
+	float pingpong = PushConstants.data2.x;
+    vec2 perms = vec2(1,-1);
+    
+	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(noiseTex);
+	if(id.x < size.x && id.y < size.y)
+    {
+        int index = int(mod(int(id.x+id.y),2));
+        float perm = index * 2 - 1;
+        if (pingpong == 0)
+        {
+            vec2 h  = imageLoad(pingpong0Tex, id.xy).xy;
+            imageStore(pingpong0Tex,id.xy,vec4(perm*h/float(size.x*size.y),0,0));
+        }
+        else
+        {
+            vec2 h  = imageLoad(pingpong1Tex, id.xy).xy;
+            imageStore(pingpong0Tex,id.xy,vec4(perm*h/float(size.x*size.y),0,0));
+        }
+    }
 }

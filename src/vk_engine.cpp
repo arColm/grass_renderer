@@ -148,6 +148,7 @@ void VulkanEngine::draw()
 	vkutil::transitionImage(cmd, _windMapImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	updateWindMap(cmd);
 	updateGrassData(cmd);
+	_water.update(cmd);
 
 	//calculate shadow map
 	vkutil::transitionImage(cmd, _shadowMapImageArray.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);

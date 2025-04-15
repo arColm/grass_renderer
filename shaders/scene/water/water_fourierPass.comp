@@ -4,10 +4,10 @@ layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 #include "computeResources.glsl"
 
-layout(rg16f,set = 1, binding = 0) uniform image2D fourierDx_DzTex;
-layout(rg16f,set = 1, binding = 1) uniform image2D fourierDy_DxdzTex;
-layout(rg16f,set = 1, binding = 2) uniform image2D fourierDxdx_DzdzTex;
-layout(rg16f,set = 1, binding = 3) uniform image2D fourierDydx_DydzTex;
+layout(rgba16f,set = 1, binding = 0) uniform image2D fourierDx_DzTex;
+layout(rgba16f,set = 1, binding = 1) uniform image2D fourierDy_DxdzTex;
+layout(rgba16f,set = 1, binding = 2) uniform image2D fourierDxdx_DzdzTex;
+layout(rgba16f,set = 1, binding = 3) uniform image2D fourierDydx_DydzTex;
 
 //push constants block
 layout( push_constant ) uniform constants
@@ -20,7 +20,61 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 
+const float PI = 3.1415926;
+vec2 ComplexExp(vec2 a)
+{
+    return vec2(cos(a.y), sin(a.y)) * exp(a.x);
+}
+
+vec2 ComplexMul(vec2 a, vec2 b)
+{
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
 void main()
 {
 
+	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(fourierDx_DzTex);
+    float time = PushConstants.data1.x;
+
+    const float V = 60;
+    const float L = 40;// (V * V) / g;
+
+    
+	if(id.x < size.x && id.y < size.y)
+    {
+        vec2 k = (2.0 * PI * vec2(id.xy - 0.5 * size) / L);
+        float magnitude = max(0.0001, length(k));
+        float magRcp = 1.0/(magnitude);
+        float w = sqrt(9.81 * magnitude);
+    
+        vec2 posh0k = imageLoad(posSpectrumTex,id.xy).xy;
+        vec2 negh0k = imageLoad(negSpectrumTex,id.xy).xy * vec2(1,-1);
+
+        float cos_w_t = cos(w * time);
+        float sin_w_t = sin(w * time);
+
+        vec2 exp_iwt = vec2(cos_w_t, sin_w_t);
+        vec2 exp_iwt_inv = vec2(cos_w_t, -sin_w_t);
+
+        vec2 h = ComplexMul(posh0k, exp_iwt) + ComplexMul(negh0k, exp_iwt_inv);
+        vec2 ih = vec2(-h.y, h.x);
+
+        vec2 Dx = ih * k.x * magRcp;
+        vec2 Dy = h;
+        vec2 Dz = ih * k.y * magRcp;
+
+        vec2 Dxdx = -h * k.x * k.x * magRcp;
+        vec2 Dydx = ih * k.x;
+        vec2 Dzdx = -h * k.x * k.y * magRcp;
+
+        vec2 Dydz = ih * k.y;
+        vec2 Dzdz = -h * k.y * k.y * magRcp;
+        
+        imageStore(fourierDx_DzTex, id.xy, vec4(Dx.x-Dz.y, Dz.x+Dx.y,0,0));
+        imageStore(fourierDy_DxdzTex, id.xy, vec4(Dy.x - Dzdx.y, Dzdx.x + Dy.y,0,0));
+        imageStore(fourierDxdx_DzdzTex, id.xy, vec4(Dxdx.x-Dzdz.y, Dzdz.x+Dxdx.y,0,0));
+        imageStore(fourierDydx_DydzTex, id.xy, vec4(Dydx.x-Dydz.y, Dydz.x+Dydx.y,0,0));
+    }
 }
