@@ -9,6 +9,10 @@ const int SHADOW_CASCADE_COUNT = 3;
 
 layout (set = 1, binding = 0) uniform sampler2DArray shadowMaps;
 
+layout (set = 2, binding = 0) uniform sampler2D displacementTex;
+layout (set = 2, binding = 1) uniform sampler2D derivativesTex;
+layout (set = 2, binding = 2) uniform sampler2D turbulenceTex;
+
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec4 inColor;
 layout (location = 2) in vec2 inUV;

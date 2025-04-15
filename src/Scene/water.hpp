@@ -69,6 +69,8 @@ private:
 
 	VkDescriptorSet _waterDataDescriptorSet;
 	VkDescriptorSetLayout _waterDataDescriptorLayout;
+	VkDescriptorSet _waterDataSamplerDescriptorSet;
+	VkDescriptorSetLayout _waterDataSamplerDescriptorLayout;
 	VkDescriptorSet _fourierDescriptorSet; 
 	VkDescriptorSetLayout _fourierDescriptorLayout;
 	VkDescriptorSet _ifft2DDescriptorSet; //write to this in runtime changing pinpong and fourier

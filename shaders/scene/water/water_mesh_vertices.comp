@@ -36,8 +36,8 @@ void main() {
 
 	Vertex v;
 	v.position = vec3(x,y,z);
-	v.uv_x = 0;
-	v.uv_y = 0;
+	v.uv_x = float(gl_GlobalInvocationID.x)/float(numVerticesPerSide);
+	v.uv_y = float(gl_GlobalInvocationID.y)/float(numVerticesPerSide);
 	v.normal = vec3(0,1,0);
 	v.color = vec4(0.471,0.529,0.788,0.55);
 	

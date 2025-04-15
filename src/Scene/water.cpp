@@ -80,12 +80,20 @@ void WaterMesh::initImages()
 	viewInfo = vkinit::imageViewCreateInfo(_derivativesImage.imageFormat, _derivativesImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_derivativesImage.imageView));
 
+	//turbulence
+	_turbulenceImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_turbulenceImage.imageExtent = _displacementImage.imageExtent;
+	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_turbulenceImage.image, &_turbulenceImage.allocation, nullptr);
+	viewInfo = vkinit::imageViewCreateInfo(_turbulenceImage.imageFormat, _turbulenceImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_turbulenceImage.imageView));
+
 	//noise
 	_noiseImage.imageFormat = _displacementImage.imageFormat;
 	_noiseImage.imageExtent = _displacementImage.imageExtent;
 	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_noiseImage.image, &_noiseImage.allocation, nullptr);
 	viewInfo = vkinit::imageViewCreateInfo(_noiseImage.imageFormat, _noiseImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_noiseImage.imageView));
+
 
 	//butterfly
 	imageExtent = {
@@ -156,13 +164,6 @@ void WaterMesh::initImages()
 	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_negSpectrumImage.image, &_negSpectrumImage.allocation, nullptr);
 	viewInfo = vkinit::imageViewCreateInfo(_negSpectrumImage.imageFormat, _negSpectrumImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_negSpectrumImage.imageView));
-
-	_turbulenceImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	_turbulenceImage.imageExtent = _displacementImage.imageExtent;
-	imgInfo = vkinit::imageCreateInfo(_turbulenceImage.imageFormat, imageUsageFlags, imageExtent);
-	vmaCreateImage(_engine->_allocator, &imgInfo, &imgAllocInfo, &_turbulenceImage.image, &_turbulenceImage.allocation, nullptr);
-	viewInfo = vkinit::imageViewCreateInfo(_turbulenceImage.imageFormat, _turbulenceImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-	VK_CHECK(vkCreateImageView(_engine->_device, &viewInfo, nullptr, &_turbulenceImage.imageView));
 }
 
 void WaterMesh::initDescriptors()
@@ -172,7 +173,14 @@ void WaterMesh::initDescriptors()
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //displacement
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //derivatives
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); //turbulence
-		_waterDataDescriptorLayout = builder.build(_engine->_device, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+		_waterDataDescriptorLayout = builder.build(_engine->_device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //displacement
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //derivatives
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //turbulence
+		_waterDataSamplerDescriptorLayout = builder.build(_engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;
@@ -205,6 +213,14 @@ void WaterMesh::initDescriptors()
 		writer.writeImage(1, _derivativesImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.writeImage(2, _turbulenceImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.updateSet(_engine->_device, _waterDataDescriptorSet);
+	}
+	{
+		_waterDataSamplerDescriptorSet = _engine->_globalDescriptorAllocator.allocate(_engine->_device, _waterDataSamplerDescriptorLayout);
+		DescriptorWriter writer;
+		writer.writeImage(0, _displacementImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(1, _derivativesImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(2, _turbulenceImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.updateSet(_engine->_device, _waterDataSamplerDescriptorSet);
 	}
 	{
 		_fourierDescriptorSet = _engine->_globalDescriptorAllocator.allocate(_engine->_device, _fourierDescriptorLayout);
@@ -377,7 +393,7 @@ void WaterMesh::initPipelines()
 		VkDescriptorSetLayout layouts[] = {
 			_engine->_sceneDataDescriptorLayout,
 			_engine->_shadowMapDescriptorLayout,
-			_waterDataDescriptorLayout
+			_waterDataSamplerDescriptorLayout
 		};
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipelineLayoutCreateInfo();
@@ -618,16 +634,15 @@ void WaterMesh::initMesh()
 
 int WaterMesh::draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants)
 {
-
-	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipeline);
 	{
 		VkDescriptorSet sets[] = {
 			*sceneDataDescriptorSet,
 			_engine->_shadowMapDescriptorSet,
-			_waterDataDescriptorSet
+			_waterDataSamplerDescriptorSet
 		};
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _waterPipelineLayout, 0, 3, sets, 0, nullptr);
 	}
@@ -772,9 +787,9 @@ void WaterMesh::ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture)
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(_engine->_time, 0, 0, 1);
 
-	vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transitionImage(cmd, _butterflyImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, initialTexture.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	{
 		_ifft2DDescriptorSet = _engine->_globalDescriptorAllocator.allocate(_engine->_device, _ifft2DDescriptorLayout);
 		DescriptorWriter writer;
@@ -797,7 +812,6 @@ void WaterMesh::ifft2D(VkCommandBuffer cmd, AllocatedImage& initialTexture)
 		vkutil::transitionImage(cmd, _pingpongImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL); 
 		pingpong = !pingpong;
 	}
-
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _verticalPassPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _verticalPassPipelineLayout, 0, 1, &_computeResourceDescriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _verticalPassPipelineLayout, 1, 1, &_ifft2DDescriptorSet, 0, nullptr);
@@ -841,4 +855,8 @@ void WaterMesh::copyToResultTextures(VkCommandBuffer cmd)
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _copyPassPipelineLayout, 1, 1, &_waterDataDescriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, _copyPassPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
+
+	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 }
