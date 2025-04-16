@@ -418,8 +418,7 @@ void VulkanEngine::drawGeometry(VkCommandBuffer cmd)
 	//	TRANSPARENT MESHES
 	//
 	UI_triangleCount += _water.draw(cmd, &sceneDataDescriptorSet, pushConstants);
-	//draw clouds
-	UI_triangleCount += _clouds.draw(&sceneDataDescriptorSet, pushConstants, cmd);
+	UI_triangleCount += _clouds.draw(cmd, &sceneDataDescriptorSet, pushConstants);
 	vkCmdEndRendering(cmd);
 }
 

@@ -9,6 +9,7 @@
 layout (set = 2, binding = 0) uniform sampler2D displacementTex;
 layout (set = 2, binding = 1) uniform sampler2D derivativesTex;
 layout (set = 2, binding = 2) uniform sampler2D turbulenceTex;
+layout (set = 2, binding = 3) uniform sampler2D depthTex;
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec4 outColor;

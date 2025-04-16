@@ -11,9 +11,9 @@ public:
 	static const int CLOUD_MAP_SIZE = 128;
 	static const int CLOUD_MAP_HEIGHT = 128;
 
-	void update(VulkanEngine* engine, VkCommandBuffer cmd);
+	void update(VkCommandBuffer cmd, VulkanEngine* engine);
 	void init(VulkanEngine* engine);
-	int draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd); //returns number of tris
+	int draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants); //returns number of tris
 
 	void drawGUI();
 

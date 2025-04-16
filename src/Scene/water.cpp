@@ -180,6 +180,7 @@ void WaterMesh::initDescriptors()
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //displacement
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //derivatives
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //turbulence
+		builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); //depth
 		_waterDataSamplerDescriptorLayout = builder.build(_engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 	}
 	{
@@ -217,9 +218,10 @@ void WaterMesh::initDescriptors()
 	{
 		_waterDataSamplerDescriptorSet = _engine->_globalDescriptorAllocator.allocate(_engine->_device, _waterDataSamplerDescriptorLayout);
 		DescriptorWriter writer;
-		writer.writeImage(0, _displacementImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.writeImage(1, _derivativesImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.writeImage(2, _turbulenceImage.imageView, _sampler, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(0, _displacementImage.imageView, _sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(1, _derivativesImage.imageView, _sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(2, _turbulenceImage.imageView, _sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.writeImage(3, _engine->_depthImage.imageView, _sampler, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.updateSet(_engine->_device, _waterDataSamplerDescriptorSet);
 	}
 	{
@@ -423,7 +425,7 @@ void WaterMesh::initPipelines()
 			vkutil::ALPHABLEND,
 		};
 		pipelineBuilder.setBlendingModes(modes);
-		pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+		pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS_OR_EQUAL);
 		pipelineBuilder.setColorAttachmentFormats(colorAttachmentFormats);
 		pipelineBuilder.setDepthFormat(_engine->_depthImage.imageFormat);
 
@@ -843,7 +845,7 @@ void WaterMesh::copyToResultTextures(VkCommandBuffer cmd)
 	vkCmdPushConstants(cmd, _copyPassPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 	vkCmdDispatch(cmd, std::ceil(TEXTURE_SIZE / 8), std::ceil(TEXTURE_SIZE / 8), 1);
 
-	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(cmd, _displacementImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkutil::transitionImage(cmd, _derivativesImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkutil::transitionImage(cmd, _turbulenceImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }

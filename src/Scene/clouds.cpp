@@ -9,7 +9,7 @@
 #include "../../thirdparty/imgui/imgui.h"
 #include <iostream>
 
-void CloudMesh::update(VulkanEngine* engine, VkCommandBuffer cmd)
+void CloudMesh::update(VkCommandBuffer cmd, VulkanEngine* engine)
 {
 	ComputePushConstants pushConstants;
 	pushConstants.data1 = glm::vec4(engine->_time, 1, 1, 1);
@@ -241,7 +241,7 @@ void CloudMesh::init(VulkanEngine* engine)
 
 	engine->immediateSubmit(
 		[&](VkCommandBuffer cmd) {
-			update(engine, cmd);
+			update(cmd, engine);
 		}
 	);
 
@@ -459,7 +459,7 @@ void CloudMesh::init(VulkanEngine* engine)
 
 }
 
-int CloudMesh::draw(VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants, VkCommandBuffer cmd)
+int CloudMesh::draw(VkCommandBuffer cmd, VkDescriptorSet* sceneDataDescriptorSet, GPUDrawPushConstants pushConstants)
 {
 	CloudSettingsPushConstants settings;
 	//settings.coverage = (-_cloudCoverage + 0.5f) * 2;
